@@ -601,6 +601,27 @@ Caller identity, trusted IP attribution across container networking, and the con
 
 Phase 1 is a working prototype, not a disposable implementation. Production readiness is deferred. Prompt assembly remains the responsibility of consuming software; recipes are not part of the current implementation scope.
 
+### Phase 1 Implementation Strategy
+
+Implement Phase 1 in the following stages. Supply the coding LLM with the complete Functional Requirements, Technical Requirements, and Software Architectural Principles at the outset, but authorize implementation **one stage at a time**. Do not begin the next stage until the current stage meets its validation gate.
+
+| Stage | Deliverable | Validation gate |
+|---|---|---|
+| **1. Project Foundation** | Python project structure, pinned dependencies, virtual environment guidance, configuration, and test harness. | Package installs in a clean environment; configuration validation and initial tests run. |
+| **2. Database Foundation** | Database roles, schemas, tables, constraints, triggers, seed data, and the initial `scripts/init_db.py` setup framework. | Schema and seed tests pass in an isolated PostgreSQL database; `--check` is read-only and applicable setup steps are idempotent. Full initialization is not yet complete. |
+| **3. PostgreSQL API** | All specified SQL functions, grants, and remaining initialization migrations. | Function integration and role-permission tests pass; full clean initialization, rerun, and failure/rollback tests pass. |
+| **4. Python API** | Python wrappers for the PostgreSQL functions and the common JSON response contract. | Unit and PostgreSQL integration tests pass for all specified operations and errors. |
+| **5. CLI** | The `arkkan` command and subcommands, options, help, authentication, and output handling defined in the CLI section. | CLI argument, output, authorization, and end-to-end command tests pass. |
+| **6. End-to-End Validation** | Complete Phase 1 workflow verification and setup/usage documentation. | All Phase 1 acceptance tests pass on macOS, including fresh setup and representative successful and failed workflows. |
+
+**Execution controls:**
+
+- At each stage, implement only the authorized scope; consult the full specifications to preserve compatibility with later stages. Do not invent requirements or public APIs.
+- Resolve material conflicts or unspecified behavior through the prescribed clarification process before implementing the affected behavior. Do not reconfirm requirements already defined.
+- Perform **two review-and-correction passes per stage**: (1) requirements coverage and correctness; (2) code quality, consistency, maintainability, and regression risks. Run the relevant tests and report actual results before requesting authorization for the next stage.
+- Create a Git checkpoint after each validated stage. Do not treat an incomplete stage or an untested implementation as complete.
+- Treat Stage 2 as a foundation for initialization, not its completion. Stage 3 completes and validates the Initialization (Phase 1) contract after the API functions exist.
+
 ### Cross-Phase Requirements
 
 - Develop and initially test on macOS. Linux Docker deployment begins in Phase 2.
