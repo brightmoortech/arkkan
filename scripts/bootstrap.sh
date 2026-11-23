@@ -8,14 +8,14 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 if [ ! -f ".python-version" ]; then
-    echo "[ERROR] .python-version not found"
+    echo "[ERROR] .python-version not found" >&2
     exit 1
 fi
 
 REQUIRED_VERSION="$(tr -d '[:space:]' < .python-version)"
 
 if [ -z "${REQUIRED_VERSION}" ]; then
-    echo "[ERROR] .python-version is empty"
+    echo "[ERROR] .python-version is empty" >&2
     exit 1
 fi
 
@@ -38,9 +38,11 @@ for candidate in "${PYTHON_CANDIDATES[@]}"; do
         continue
     fi
 
-    candidate_version="$(
-        "${candidate_path}" -c         'import platform; print(platform.python_version())'
-    )"
+    if ! candidate_version="$(
+        "${candidate_path}" -c 'import platform; print(platform.python_version())'
+    )"; then
+        continue
+    fi
 
     if [ "${candidate_version}" = "${REQUIRED_VERSION}" ]; then
         PYTHON_EXECUTABLE="${candidate_path}"
@@ -49,7 +51,7 @@ for candidate in "${PYTHON_CANDIDATES[@]}"; do
 done
 
 if [ -z "${PYTHON_EXECUTABLE}" ]; then
-    echo "[ERROR] Python ${REQUIRED_VERSION} not found"
+    echo "[ERROR] Python ${REQUIRED_VERSION} not found" >&2
     exit 1
 fi
 
@@ -62,22 +64,26 @@ else
     echo "[SKIP] Virtual environment already exists: .venv"
 fi
 
-source .venv/bin/activate
-
-VENV_VERSION="$(
-    python -c 'import platform; print(platform.python_version())'
-)"
-
-if [ "${VENV_VERSION}" != "${REQUIRED_VERSION}" ]; then
-    echo "[ERROR] .venv uses Python ${VENV_VERSION}; expected ${REQUIRED_VERSION}"
+VENV_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+if [ ! -x "${VENV_PYTHON}" ]; then
+    echo "[ERROR] .venv has no executable Python; inspect the environment before recreating it" >&2
     exit 1
 fi
 
-python -m pip install -r requirements-bootstrap.txt
-python -m pip install -r requirements.txt
-python -m pip install --no-build-isolation --no-deps -e .
-python -m pip check
+VENV_VERSION="$(
+    "${VENV_PYTHON}" -c 'import platform; print(platform.python_version())'
+)"
 
-python -m pytest
+if [ "${VENV_VERSION}" != "${REQUIRED_VERSION}" ]; then
+    echo "[ERROR] .venv uses Python ${VENV_VERSION}; expected ${REQUIRED_VERSION}" >&2
+    exit 1
+fi
+
+"${VENV_PYTHON}" -m pip install -r requirements-bootstrap.txt
+"${VENV_PYTHON}" -m pip install -r requirements.txt
+"${VENV_PYTHON}" -m pip install --no-build-isolation --no-deps -e .
+"${VENV_PYTHON}" -m pip check
+
+"${VENV_PYTHON}" -m pytest
 
 echo "[OK] Bootstrap complete"
