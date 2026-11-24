@@ -114,7 +114,20 @@ _API_READS = (
     ("get_resource_version_default", "get_resource_version_default", (("slug", "text"),)),
     ("get_resource_info", "get_resource_info", (("slug", "text"),)),
 )
-_PUBLIC_FUNCTIONS = _API_WRITES + tuple((name, args, None) for _, name, args in _API_READS)
+_API_LIFECYCLE = (
+    ("delete_resource_version", (("slug", "text"), ("version", "text")), None),
+    ("delete_resource_version_all", (("slug", "text"),), None),
+    ("clean_up", (), None),
+    ("delete_resource", (("slug", "text"),), None),
+    ("set_resource_state", (("slug", "text"), ("version", "text"), ("target_state", "text"), ("force", "boolean")), "false"),
+    ("set_resource_state_all", (("slug", "text"), ("target_state", "text")), None),
+    ("set_resource_state_all_with_guard", (("slug", "text"), ("source_state", "text"), ("target_state", "text")), None),
+)
+_STATE_HELPERS = (
+    ("api_transition_valid", "sql", (("source_state", "text"), ("target_state", "text")), "boolean"),
+    ("api_set_states", "plpgsql", (("operation_name", "text"), ("slug", "text"), ("source_state", "text"), ("target_state", "text")), "jsonb"),
+)
+_PUBLIC_FUNCTIONS = _API_WRITES + tuple((name, args, None) for _, name, args in _API_READS) + _API_LIFECYCLE
 _READ_NAMES = frozenset(name for _, name, _ in _API_READS)
 
 
@@ -162,7 +175,7 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
     if any(allowed_relations.get(name) != kind for name, kind in relations):
         raise ValueError(f"Unexpected relation in schema {schema}.")
     allowed_helpers = {(f"reject_{table}_change", 0) for table in _TABLES}
-    allowed_helpers.update((name, len(arguments)) for name, _, arguments, _ in _API_HELPERS)
+    allowed_helpers.update((name, len(arguments)) for name, _, arguments, _ in _API_HELPERS + _STATE_HELPERS)
     if schema == "arkkan_api":
         allowed_helpers = {(name, len(arguments)) for name, arguments, _ in _PUBLIC_FUNCTIONS}
     functions = connection.execute("""
@@ -410,8 +423,9 @@ def _api_function_ready(
     if not rows:
         return False
     expected = (body, "f", True, language, ", ".join(kind for _, kind in arguments),
-                [argument for argument, _ in arguments], return_type,
-                False, schema == "arkkan_api", ("s" if name in _READ_NAMES else "v") if schema == "arkkan_api" else "i",
+                [argument for argument, _ in arguments] or None, return_type,
+                False, schema == "arkkan_api",
+                "s" if name in _READ_NAMES else "v" if schema == "arkkan_api" or name == "api_set_states" else "i",
                 False, "u", ["search_path=pg_catalog"],
                 0 if defaults is None else len(defaults.split(", ")),
                 True, True, False, defaults, True)
@@ -491,6 +505,29 @@ def _migration_list(root: Path) -> tuple[_Migration, ...]:
             filename, partial(_api_function_ready, name=name, language="plpgsql",
                               arguments=arguments, return_type="jsonb", body=parts[1],
                               schema="arkkan_api"),
+            partial(_execute_sql, statement=statement),
+        ))
+    for number, (name, language, arguments, return_type) in enumerate(_STATE_HELPERS, 28):
+        filename = f"{number:03}_{name}"
+        statement = (folder / f"{filename}.sql").read_text(encoding="utf-8")
+        parts = statement.split("$body$")
+        if len(parts) != 3 or not parts[1].strip():
+            raise ValueError(f"Invalid state helper migration: {filename}.")
+        migrations.append(_Migration(
+            filename, partial(_api_function_ready, name=name, language=language,
+                              arguments=arguments, return_type=return_type, body=parts[1]),
+            partial(_execute_sql, statement=statement),
+        ))
+    for number, (name, arguments, defaults) in enumerate(_API_LIFECYCLE, 30):
+        filename = f"{number:03}_{name}"
+        statement = (folder / f"{filename}.sql").read_text(encoding="utf-8")
+        parts = statement.split("$body$")
+        if len(parts) != 3 or not parts[1].strip():
+            raise ValueError(f"Invalid lifecycle migration: {filename}.")
+        migrations.append(_Migration(
+            filename, partial(_api_function_ready, name=name, language="plpgsql",
+                              arguments=arguments, return_type="jsonb", body=parts[1],
+                              schema="arkkan_api", defaults=defaults),
             partial(_execute_sql, statement=statement),
         ))
     return tuple(migrations)

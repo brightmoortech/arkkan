@@ -260,3 +260,19 @@ execution. The cumulative migration inventory is 27.
 |---|---|---|
 | S3-022 | Read Operations / get_resource_content; default lookup | `test_s3_022_content_selection_matrix`: exercise all retrieval modes and call forms against missing, disabled, obsolete, enabled and default versions, with and without a fallback default; verify selected version/state/content and successful empty content. |
 | S3-023 | Read Operations; Shared validation | `test_s3_023_read_metadata_and_validation`: metadata includes every lifecycle state and empty resources without content, lists include versionless resources, timestamps use UTC, unknown targets and invalid identifiers/modes return errors. |
+
+
+### Work Package 4: Deletion and lifecycle
+
+Migrations 028–036 add private transition/bulk-state helpers and the seven
+lifecycle operations. Resource mutations lock the parent definition; cleanup
+locks parents in UUID order. Bulk selection membership is captured before
+changing defaults. The cumulative inventory is 36 migrations. Database tests
+remain pending consolidated staging execution.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S3-024 | Resource States; set_resource_state | `test_s3_024_state_transition_matrix`: cover all 16 source/target pairs with force both false and true, default replacement and invalid inputs; rejected operations preserve all rows. |
+| S3-025 | Bulk state operations; default policies | `test_s3_025_bulk_state_policy`: reject partial-invalid, same-state, default-removal and multiple-default outcomes; preserve selected membership during promotion; cover successful bulk transitions, zero matches, empty resources and invalid states/targets. |
+| S3-026 | Admin API / Delete Operations | `test_s3_026_deletion_contracts`: single, resource-wide and global obsolete deletion preserve definitions; explicit deletion accepts empty/all-obsolete resources and rejects active versions; counts, missing/invalid targets and retained types match contracts. |
+| S3-027 | Common API Contracts / rollback | `test_s3_027_mutation_failure_rolls_back`: injected serialization failures after mutation roll back explicit deletion, cleanup and bulk state changes without leaking diagnostics. |

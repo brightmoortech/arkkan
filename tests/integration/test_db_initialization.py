@@ -41,6 +41,7 @@ def _reset_application() -> None:
             for signature in (
                 "api_response(text, text, jsonb, text)",
                 "api_identifier_valid(text)", "api_state_valid(text)", "api_mode_valid(text)",
+                "api_transition_valid(text, text)", "api_set_states(text, text, text, text)",
             ):
                 # All signatures are fixed test-owned identifiers, never caller inputs.
                 connection.execute(f"DROP FUNCTION IF EXISTS arkkan.{signature} RESTRICT")
@@ -112,13 +113,13 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
     for args in ((), ("--check",)):
         result = _cli(*args)
         assert result.returncode == 0, result.stderr
-        assert result.stdout.count("[PENDING]") == 27
+        assert result.stdout.count("[PENDING]") == 36
         assert "[APPLIED]" not in result.stdout
         with _staging_connection(_ROOT) as connection:
             assert _state(connection) == before
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[APPLIED]") == 27
+    assert result.stdout.count("[APPLIED]") == 36
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[2] == before[2] == [(True, "staging")]
@@ -133,14 +134,14 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
             SELECT COUNT(*) FROM pg_catalog.pg_proc AS p
             JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
             WHERE n.nspname = 'arkkan_api'
-        """).fetchone() == (11,)
+        """).fetchone() == (18,)
         seeds = json.loads((_ROOT / "sql/migrations/012_resource_types.json").read_text())
         assert connection.execute("""
             SELECT slug, description, is_system FROM arkkan.resource_types ORDER BY slug
         """).fetchall() == [(slug, seeds[slug], True) for slug in sorted(seeds)]
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[UNCHANGED]") == 27
+    assert result.stdout.count("[UNCHANGED]") == 36
     assert "[APPLIED]" not in result.stdout
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
@@ -501,7 +502,7 @@ def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> N
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[:4] == before[:4]
-        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 15
+        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 24
         assert [connection.execute(query).fetchall() for query in queries] == data_before
     assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
     with _staging_connection(_ROOT) as connection:
@@ -813,7 +814,7 @@ def test_s3_019_upgrade_preserves_wp1(_clean_application: None) -> None:
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[:4] == before_state[:4]
-        assert set(before_state[4]).issubset(after[4]) and len(after[4]) == len(before_state[4]) + 11
+        assert set(before_state[4]).issubset(after[4]) and len(after[4]) == len(before_state[4]) + 20
         assert _snapshot(connection) == before_data
     assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
     with _staging_connection(_ROOT) as connection:
@@ -991,3 +992,142 @@ def test_s3_023_read_metadata_and_validation(_initialized: None) -> None:
             assert _call(connection, 'get_resource_content', 'r', version)['result'] == 'error'
         for mode in (None, '', 'Strict', 'unknown'):
             assert _call(connection, 'get_resource_content', 'r', 'v', mode)['result'] == 'error'
+
+
+def test_s3_024_state_transition_matrix(_initialized: None) -> None:
+    allowed = {
+        'enabled': {'enabled_default', 'disabled'},
+        'enabled_default': {'enabled', 'disabled'},
+        'disabled': {'enabled', 'enabled_default', 'obsolete'},
+        'obsolete': {'disabled'},
+    }
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        for source, targets in allowed.items():
+            for target in allowed:
+                for force in (False, True):
+                    with connection.transaction(force_rollback=True):
+                        connection.execute('UPDATE arkkan.resource_versions SET state = %s', (source,))
+                        before = _snapshot(connection)
+                        result = _call(connection, 'set_resource_state', 'resource', 'opaque-version', target, force)
+                        success = target in targets and (source != 'enabled_default' or force)
+                        assert result['result'] == ('success' if success else 'error')
+                        if success:
+                            assert result['data'] == {'slug': 'resource', 'version': 'opaque-version', 'state': target}
+                            assert connection.execute('SELECT state FROM arkkan.resource_versions').fetchone() == (target,)
+                        else:
+                            assert _snapshot(connection) == before
+        assert _call(connection, 'add_resource', 'resource', 'new')['result'] == 'success'
+        assert _call(connection, 'set_resource_state', 'resource', 'new', 'enabled_default')['result'] == 'success'
+        assert connection.execute('SELECT version, state FROM arkkan.resource_versions ORDER BY version').fetchall() == [
+            ('new', 'enabled_default'), ('opaque-version', 'enabled'),
+        ]
+        for args in ((None, 'new', 'enabled'), ('resource', None, 'enabled'),
+                     ('missing', 'new', 'enabled'), ('resource', 'missing', 'enabled'),
+                     ('resource', 'new', None), ('resource', 'new', 'unknown'),
+                     ('resource', 'new', 'disabled', None)):
+            before = _snapshot(connection)
+            assert _call(connection, 'set_resource_state', *args)['result'] == 'error'
+            assert _snapshot(connection) == before
+
+
+def test_s3_025_bulk_state_policy(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        assert _call(connection, 'add_resource', 'resource', 'second')['result'] == 'success'
+        # A single enabled selection can replace a default. The demoted default
+        # must not become a new member of that selection.
+        connection.execute("UPDATE arkkan.resource_versions SET state = 'enabled' WHERE version = 'second'")
+        result = _call(connection, 'set_resource_state_all_with_guard', 'resource', 'enabled', 'enabled_default')
+        assert result['data'] == {'slug': 'resource', 'changed_count': 1}
+        assert connection.execute('SELECT version, state FROM arkkan.resource_versions ORDER BY version').fetchall() == [
+            ('opaque-version', 'enabled'), ('second', 'enabled_default'),
+        ]
+        for args in (('resource', 'disabled'), ('resource', 'enabled_default'), ('resource', 'enabled')):
+            before = _snapshot(connection)
+            assert _call(connection, 'set_resource_state_all', *args)['result'] == 'error'
+            assert _snapshot(connection) == before
+        connection.execute("UPDATE arkkan.resource_versions SET state = 'disabled'")
+        before = _snapshot(connection)
+        assert _call(connection, 'set_resource_state_all', 'resource', 'enabled_default')['result'] == 'error'
+        assert _snapshot(connection) == before
+        assert _call(connection, 'set_resource_state_all', 'resource', 'enabled')['data'] == {
+            'slug': 'resource', 'changed_count': 2,
+        }
+        assert _call(connection, 'set_resource_state_all_with_guard', 'resource', 'obsolete', 'disabled')['data']['changed_count'] == 0
+        before = _snapshot(connection)
+        assert _call(connection, 'set_resource_state_all_with_guard', 'resource', 'enabled', 'enabled')['result'] == 'error'
+        assert _snapshot(connection) == before
+        assert _call(connection, 'set_resource_state_all', 'resource', 'disabled')['result'] == 'success'
+        assert _call(connection, 'set_resource_state_all', 'resource', 'obsolete')['result'] == 'success'
+        assert _call(connection, 'set_resource_state_all_with_guard', 'resource', 'obsolete', 'disabled')['data']['changed_count'] == 2
+        connection.execute('DELETE FROM arkkan.resource_versions')
+        assert _call(connection, 'set_resource_state_all', 'resource', 'enabled_default')['data']['changed_count'] == 0
+        assert _call(connection, 'set_resource_state_all_with_guard', 'resource', 'disabled', 'enabled_default')['data']['changed_count'] == 0
+        for name, args in (
+            ('set_resource_state_all', ('missing', 'enabled')),
+            ('set_resource_state_all', ('resource', None)),
+            ('set_resource_state_all_with_guard', ('resource', None, 'enabled')),
+            ('set_resource_state_all_with_guard', ('resource', 'disabled', 'bad')),
+        ):
+            assert _call(connection, name, *args)['result'] == 'error'
+
+
+def test_s3_026_deletion_contracts(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        for name, args in (('delete_resource', ('resource',)),
+                           ('delete_resource_version', ('resource', 'opaque-version'))):
+            before = _snapshot(connection)
+            assert _call(connection, name, *args)['result'] == 'error'
+            assert _snapshot(connection) == before
+        assert _call(connection, 'delete_resource_version_all', 'resource')['data']['deleted_count'] == 0
+        assert _call(connection, 'clean_up')['data'] == {'deleted_count': 0}
+        for slug in ('resource', 'other'):
+            for version in ('obsolete-one', 'obsolete-two'):
+                assert _call(connection, 'add_resource', slug, version, 'custom')['result'] == 'success'
+        connection.execute("UPDATE arkkan.resource_versions SET state = 'obsolete' WHERE version LIKE 'obsolete-%'")
+        assert _call(connection, 'delete_resource_version', 'resource', 'obsolete-one')['data'] == {
+            'slug': 'resource', 'version': 'obsolete-one',
+        }
+        assert _call(connection, 'delete_resource_version_all', 'resource')['data'] == {
+            'slug': 'resource', 'deleted_count': 1,
+        }
+        assert _call(connection, 'clean_up')['data'] == {'deleted_count': 2}
+        assert _call(connection, 'get_resource_info', 'other')['data']['versions'] == []
+        assert _call(connection, 'delete_resource', 'other')['data'] == {'slug': 'other', 'deleted_version_count': 0}
+        connection.execute("UPDATE arkkan.resource_versions SET state = 'obsolete'")
+        assert _call(connection, 'delete_resource', 'resource')['data'] == {'slug': 'resource', 'deleted_version_count': 1}
+        assert connection.execute("SELECT count(*) FROM arkkan.resource_types WHERE slug = 'custom'").fetchone() == (1,)
+        for name, args in (('delete_resource', ('resource',)),
+                           ('delete_resource_version_all', ('resource',)),
+                           ('delete_resource_version', ('resource', 'missing')),
+                           ('delete_resource', (None,)),
+                           ('delete_resource_version_all', (' ',)),
+                           ('delete_resource_version', ('resource', None))):
+            assert _call(connection, name, *args)['result'] == 'error'
+
+
+@pytest.mark.parametrize('operation,table,args', [
+    ('delete_resource', 'resource_definitions', ('resource',)),
+    ('clean_up', 'resource_versions', ()),
+    ('set_resource_state_all', 'resource_versions', ('resource', 'enabled')),
+])
+def test_s3_027_mutation_failure_rolls_back(
+    _initialized: None, operation: str, table: str, args: tuple[str, ...],
+) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        connection.execute('UPDATE arkkan.resource_versions SET state = %s',
+                           ('disabled' if operation == 'set_resource_state_all' else 'obsolete',))
+        with connection.transaction(force_rollback=True):
+            connection.execute("""CREATE FUNCTION pg_temp.reject_mutation() RETURNS trigger
+                LANGUAGE plpgsql AS $$ BEGIN
+                    RAISE EXCEPTION 'sensitive diagnostic' USING ERRCODE = '40001';
+                END $$""")
+            connection.execute(f"CREATE TRIGGER reject_mutation AFTER DELETE OR UPDATE ON arkkan.{table} "
+                               "FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_mutation()")
+            before = _snapshot(connection)
+            result = _call(connection, operation, *args)
+            assert result['result'] == 'error' and 'sensitive' not in result['reason']
+            assert _snapshot(connection) == before
