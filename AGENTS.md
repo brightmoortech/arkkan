@@ -15,6 +15,7 @@ Paths are relative to the repository root. The registry identifies each document
 | [TEST_SPECIFICATION.md](arkkan.wiki/TEST_SPECIFICATION.md) | Test case definitions and traceability to requirements and acceptance criteria. |
 | [TEST_EXECUTION_PHASE1_STAGE1.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE1.md) | Recorded test execution evidence for Phase 1, Stage 1; not a requirements source. |
 | [DOCUMENT_GOVERNANCE.md](arkkan.wiki/DOCUMENT_GOVERNANCE.md) | Governs authorized document creation, modification, review, auditing, and delivery. |
+| [BACKLOG.md](arkkan.wiki/BACKLOG.md) | Deferred improvements and proposed outcomes; update when items are identified, approved, deferred, or validated. Not a source of implementation authorization. |
 | [AGENTS.md](AGENTS.md) | Repository documentation registry, reading guidance, and maintenance triggers. |
 
 ## 2. Document Reading Guidance
@@ -27,6 +28,7 @@ Select documents according to the assigned objective and scope. The following se
 | Analyze requirements or design | `README.md`, `FUNCTIONAL_REQ.md`, `TECHNICAL_REQ.md`; applicable conventions and testing governance. |
 | Implement or maintain software | `FUNCTIONAL_REQ.md`, `TECHNICAL_REQ.md`, `CODING_CONVENTIONS.md`, `TESTING.md`, `DEVELOPMENT.md`, `TEST_SPECIFICATION.md`; applicable test execution reports. |
 | Design, execute, or review tests | `FUNCTIONAL_REQ.md`, `TECHNICAL_REQ.md`, `TESTING.md`, `CODING_CONVENTIONS.md`, `TEST_SPECIFICATION.md`, `DEVELOPMENT.md`; applicable test execution reports. |
+| Evaluate deferred improvements or prepare future work | `BACKLOG.md`; applicable functional and technical requirements and governing documents. |
 | Create, modify, or review documentation | `DOCUMENT_GOVERNANCE.md`, the target document, and its applicable authoritative sources from the registry. |
 
 ## 3. Maintenance Rules

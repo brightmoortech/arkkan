@@ -53,9 +53,30 @@ connection or alter any files.
 Use the development checkout for changes and a separate staging checkout of a
 committed revision for validation. Bootstrap each checkout independently. Copy
 `.env.example` to `.env` if `.env` does not already exist, then supply values
-for that environment. The approved development and staging values are listed
-in Technical Requirements, under Environment Architecture. Choose the initial
-PostgreSQL superuser name through `PGUSER`; it is not fixed by `arkkan`.
+for that environment. The environment architecture is defined in Technical Requirements. The local
+ports were changed from the original proposals to avoid conflicts with
+existing infrastructure.
+The following non-secret values describe the validated local configuration;
+ports and paths remain configurable, not application defaults.
+
+| Setting | Development | Staging |
+|---|---|---|
+| `ARKKAN_ENVIRONMENT` | `development` | `staging` |
+| `COMPOSE_PROJECT_NAME` | `arkkan_develop` | `arkkan_stage` |
+| `POSTGRES_CONTAINER_NAME` | `arkkan-db-dev` | `arkkan-db-test` |
+| `PGHOST` | `localhost` | `localhost` |
+| `PGPORT` | `5441` | `5442` |
+| `PGDATABASE` | `arkkan_dev` | `arkkan_test` |
+| `PGUSER` | `postgres` | `postgres` |
+| `PGPASSFILE` | `~/.pgpass` | `~/.pgpass` |
+| `POSTGRES_DATA_DIR` | `~/development/data/arkkan/develop/postgres` | `~/development/data/arkkan/stage/postgres` |
+| `POSTGRES_PASSWORD_FILE` | `~/development/data/arkkan/develop/secrets/postgres_password` | `~/development/data/arkkan/stage/secrets/postgres_password` |
+
+Adjust the workspace root, ports, and credential paths for other machines.
+Choose the initial PostgreSQL superuser name through `PGUSER`; it is not fixed
+by `arkkan`. Stopped Docker containers retain their configured port mappings. The utility
+treats those mappings as conflicts even if no process is listening. Do not
+remove or reconfigure unrelated infrastructure to resolve a conflict.
 
 The operator supplies two separate credential files outside the repository
 checkout and PostgreSQL storage, each with permissions `0600`. Use a single-line password
@@ -70,11 +91,21 @@ The client password file uses the following format:
 host:port:database:user:password
 ```
 
-Replace the field names with the actual connection values and password. Escape
-literal colons and backslashes in password-file fields with a backslash. Do not
-put passwords in `.env`, shell commands, or Git. On initial provisioning, the
-passwords must match. Changing the provisioning file does not change a stored
-database password.
+Replace the field names with the actual connection values and password. The
+local development and staging entries have the following form (replace each
+placeholder with its corresponding provisioning password):
+
+```text
+localhost:5441:arkkan_dev:postgres:<development_password>
+localhost:5442:arkkan_test:postgres:<staging_password>
+```
+
+Preserve unrelated entries; the first matching client password-file entry
+is used, including wildcard entries. Escape literal colons and backslashes
+in password-file fields with a backslash. Set both credential files to
+permissions `0600` using `chmod 600` on the respective files. Do not put passwords in `.env`, shell commands, or Git.
+On initial provisioning, the passwords must match for each environment.
+Changing the provisioning file does not change a stored database password.
 
 Set `POSTGRES_DATA_DIR` to the approved external storage location for the
 selected environment, not a directory inside the checkout. Use the designated
@@ -93,13 +124,15 @@ supplying `.env`, even if the credential files do not yet exist:
 .venv/bin/python scripts/manage_environment.py setup
 ```
 
-The `setup` command validates the paths and checks for infrastructure conflicts before
-creating missing PostgreSQL storage and credential-parent directories. Existing
+The `setup` command validates paths and checks for infrastructure conflicts
+before creating missing PostgreSQL storage and credential-parent directories. Existing
 valid directories are reused without changing their permissions. If credentials
 are missing, `setup` reports the required file paths and permissions and stops
-without starting a container or initializing a database. Supply the missing
-files as described above, then rerun `setup`. No manual directory or container
-creation is required.
+without starting a container or initializing a database. The current utility
+labels this expected first-time prerequisite as `[ERROR]`. Supply the missing
+provisioning password file and ensure the matching client password-file entry
+is present as described above, even if that client file already exists. Then
+rerun `setup`. No manual directory or container creation is required.
 
 Before starting PostgreSQL, `setup` checks the driver and client password-file
 entry. For a new database, it verifies that the initial passwords match before
@@ -128,10 +161,15 @@ check. The utility does not perform recovery or password rotation.
 
 ### Staging validation
 
-Prepare the staging checkout at the committed development revision with its
-own `.env` and Python environment. Follow the same `setup` and credential
-provisioning sequence in that checkout, then run `check` before the database
-test suite. Do not modify source files in staging.
+Prepare the staging checkout at the committed development revision. For an
+existing clean staging checkout, run `git fetch origin` followed by
+`git switch --detach <commit>` (replace `<commit>` with the revision selected
+for validation). Confirm the revision and clean working tree using
+`git log -1 --oneline` and `git status --short --branch`. Do not use `git pull`
+to advance a pinned staging revision. Bootstrap independently, supply its own
+`.env`, follow the same `setup` and credential provisioning sequence, then
+run `check` before the database test suite. Do not modify source files in
+staging.
 
 ## Automated Tests
 

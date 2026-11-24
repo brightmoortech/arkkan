@@ -2,7 +2,10 @@
 
 Test governance is defined in `TESTING.md`. Test cases map to the applicable
 sections of `TECHNICAL_REQ.md`. This specification covers only the authorized
-implementation scope and expands with subsequent stages.
+implementation scope and expands with subsequent stages. Each test identifier
+denotes an executable test function. Parameterized functions exercise multiple
+cases under the same identifier; test collection and execution report the
+expanded cases.
 
 ## Phase 1, Stage 1: Project Foundation
 
@@ -15,7 +18,11 @@ implementation scope and expands with subsequent stages.
 | S1-005 | Security; Cross-Phase Requirements | `test_s1_005_preserve_values_and_exclude_credentials`: identifiers are preserved and unrelated variables and passwords are not returned. |
 | S1-006 | Cross-Phase Requirements: externally configurable connections | `test_s1_006_process_environment`: configuration reads the process environment by default. |
 
-Configuration tests are in `tests/unit/test_config.py`. They do not open a database connection or read password files. PostgreSQL connection and password-file behavior are covered when the relevant initialization and CLI stages are implemented.
+Configuration tests are in `tests/unit/test_config.py`. They do not open a
+database connection or read password files. Real PostgreSQL connectivity and
+password-file authentication for environment management are covered by the
+Stage 2 environment integration cases. Application initialization and CLI
+authentication coverage are added at their respective implementation stages.
 
 The full Stage 1 validation gate also requires running `./scripts/bootstrap.sh`
 with a clean virtual environment on macOS using Python 3.12.10 and the pinned
