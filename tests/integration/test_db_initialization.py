@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from arkkan._db_migrations import _API_WRITES, _migration_list
+from arkkan._db_migrations import _API_WRITES, _PUBLIC_FUNCTIONS, _migration_list
 from arkkan._migration_workflow import _Migration, _run_migrations
 from arkkan._test_safety import _staging_connection
 
@@ -28,7 +28,7 @@ def _reset_application() -> None:
 
     with _staging_connection(_ROOT) as connection:
         with connection.transaction():
-            for name, arguments, _ in reversed(_API_WRITES):
+            for name, arguments, _ in reversed(_PUBLIC_FUNCTIONS):
                 signature = ", ".join(kind for _, kind in arguments)
                 connection.execute(
                     f"DROP FUNCTION IF EXISTS arkkan_api.{name}({signature}) RESTRICT"
@@ -112,13 +112,13 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
     for args in ((), ("--check",)):
         result = _cli(*args)
         assert result.returncode == 0, result.stderr
-        assert result.stdout.count("[PENDING]") == 21
+        assert result.stdout.count("[PENDING]") == 27
         assert "[APPLIED]" not in result.stdout
         with _staging_connection(_ROOT) as connection:
             assert _state(connection) == before
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[APPLIED]") == 21
+    assert result.stdout.count("[APPLIED]") == 27
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[2] == before[2] == [(True, "staging")]
@@ -133,14 +133,14 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
             SELECT COUNT(*) FROM pg_catalog.pg_proc AS p
             JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
             WHERE n.nspname = 'arkkan_api'
-        """).fetchone() == (5,)
+        """).fetchone() == (11,)
         seeds = json.loads((_ROOT / "sql/migrations/012_resource_types.json").read_text())
         assert connection.execute("""
             SELECT slug, description, is_system FROM arkkan.resource_types ORDER BY slug
         """).fetchall() == [(slug, seeds[slug], True) for slug in sorted(seeds)]
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[UNCHANGED]") == 21
+    assert result.stdout.count("[UNCHANGED]") == 27
     assert "[APPLIED]" not in result.stdout
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
@@ -501,7 +501,7 @@ def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> N
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[:4] == before[:4]
-        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 9
+        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 15
         assert [connection.execute(query).fetchall() for query in queries] == data_before
     assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
     with _staging_connection(_ROOT) as connection:
@@ -512,7 +512,7 @@ def _call(connection: "Connection[Any]", name: str, *arguments: Any) -> dict[str
     """Call only fixed WP2 function names and check their response envelope."""
     from psycopg import sql
 
-    assert name in {item[0] for item in _API_WRITES}
+    assert name in {item[0] for item in _PUBLIC_FUNCTIONS}
     response = connection.execute(
         sql.SQL("SELECT arkkan_api.{}({})").format(
             sql.Identifier(name), sql.SQL(", ").join(sql.Placeholder() for _ in arguments),
@@ -522,7 +522,7 @@ def _call(connection: "Connection[Any]", name: str, *arguments: Any) -> dict[str
     assert response["result"] in ("success", "error")
     if response["result"] == "success":
         assert set(response) == {"operation_name", "message_type", "result", "data"}
-        assert isinstance(response["data"], dict)
+        assert isinstance(response["data"], list if name == "list_resources_matching_type" else dict)
     else:
         assert set(response) == {"operation_name", "message_type", "result", "reason"}
         assert isinstance(response["reason"], str) and response["reason"].strip()
@@ -813,7 +813,7 @@ def test_s3_019_upgrade_preserves_wp1(_clean_application: None) -> None:
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[:4] == before_state[:4]
-        assert set(before_state[4]).issubset(after[4]) and len(after[4]) == len(before_state[4]) + 5
+        assert set(before_state[4]).issubset(after[4]) and len(after[4]) == len(before_state[4]) + 11
         assert _snapshot(connection) == before_data
     assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
     with _staging_connection(_ROOT) as connection:
@@ -918,3 +918,76 @@ def test_s3_021_resource_writes_wait_for_lock(_initialized: None, operation: str
                     pytest.fail("Resource write did not wait on the held resource lock.")
                 assert not future.done()
             assert future.result(timeout=15)["result"] == "success"
+
+
+def test_s3_022_content_selection_matrix(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        for state in (None, 'disabled', 'obsolete', 'enabled', 'enabled_default'):
+            for default in (False, True):
+                if state == 'enabled_default' and default:
+                    continue
+                with connection.transaction(force_rollback=True):
+                    created = _call(connection, 'add_resource', 'resource', 'requested', 'role')
+                    assert created['result'] == 'success'
+                    if state is None:
+                        connection.execute('DELETE FROM arkkan.resource_versions')
+                    else:
+                        connection.execute('UPDATE arkkan.resource_versions SET state = %s', (state,))
+                    if default:
+                        assert _call(connection, 'add_resource', 'resource', 'default', None,
+                                     None, None, 'fallback', None, 'enabled_default')['result'] == 'success'
+                    available = state in ('enabled', 'enabled_default')
+                    default_version = 'default' if default else 'requested' if state == 'enabled_default' else None
+                    for mode in ('strict', 'version_priority', 'default_priority'):
+                        selected = ('requested' if available else None) if mode == 'strict' else (
+                            ('requested' if available else default_version) if mode == 'version_priority'
+                            else (default_version or ('requested' if available else None)))
+                        result = _call(connection, 'get_resource_content', 'resource', 'requested', mode)
+                        if selected is None:
+                            assert result['result'] == 'error'
+                        else:
+                            assert result['data'] == {
+                                'slug': 'resource', 'version': selected,
+                                'state': 'enabled_default' if selected == default_version else state,
+                                'content': 'fallback' if selected == 'default' else '',
+                            }
+                        if mode == 'strict':
+                            assert _call(connection, 'get_resource_content', 'resource', 'requested') == result
+                    result = _call(connection, 'get_resource_content', 'resource')
+                    lookup = _call(connection, 'get_resource_version_default', 'resource')
+                    if default_version is None:
+                        assert result['result'] == lookup['result'] == 'error'
+                    else:
+                        assert result['data']['version'] == default_version
+                        assert lookup['data'] == {'slug': 'resource', 'version': default_version}
+
+
+def test_s3_023_read_metadata_and_validation(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        assert _call(connection, 'list_resources_matching_type', 'role')['data'] == []
+        assert _call(connection, 'add_resource', 'r', 'v', 'role', 'Name', 'Description')['result'] == 'success'
+        for version, state in (('e', 'enabled'), ('d', 'enabled_default'), ('o', 'disabled')):
+            assert _call(connection, 'add_resource', 'r', version, None, None, None,
+                         'sensitive-content', None, state)['result'] == 'success'
+        connection.execute("UPDATE arkkan.resource_versions SET state = 'obsolete' WHERE version = 'o'")
+        result = _call(connection, 'get_resource_info', 'r')
+        assert set(result['data']) == {'slug', 'name', 'description', 'type_slug', 'versions'}
+        assert result['data'] | {'versions': []} == {
+            'slug': 'r', 'name': 'Name', 'description': 'Description', 'type_slug': 'role', 'versions': [],
+        }
+        assert {v['state'] for v in result['data']['versions']} == {'enabled', 'enabled_default', 'disabled', 'obsolete'}
+        for version in result['data']['versions']:
+            assert set(version) == {'version', 'state', 'created_at'} and version['created_at'].endswith('Z')
+        assert 'sensitive-content' not in str(result)
+        connection.execute('DELETE FROM arkkan.resource_versions')
+        assert _call(connection, 'get_resource_info', 'r')['data']['versions'] == []
+        assert _call(connection, 'list_resources_matching_type', 'role')['data'] == [
+            {'slug': 'r', 'name': 'Name', 'description': 'Description'},
+        ]
+        for name in ('get_resource_info', 'get_resource_content', 'get_resource_version_default', 'list_resources_matching_type'):
+            for value in (None, '', ' \t', 'missing'):
+                assert _call(connection, name, value)['result'] == 'error'
+        for version in (None, '', ' \n'):
+            assert _call(connection, 'get_resource_content', 'r', version)['result'] == 'error'
+        for mode in (None, '', 'Strict', 'unknown'):
+            assert _call(connection, 'get_resource_content', 'r', 'v', mode)['result'] == 'error'

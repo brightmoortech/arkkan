@@ -223,8 +223,8 @@ def test_s2_058_reject_unsafe_configuration(
 
 def test_s2_059_migration_manifest_and_seed_mapping() -> None:
     migrations = _migration_list(_ROOT)
-    assert len(migrations) == 21
-    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 22)]
+    assert len(migrations) == 27
+    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 28)]
     folder = _ROOT / "sql" / "migrations"
     assert {f"{migration.name}.sql" for migration in migrations} == {
         path.name for path in folder.glob("*.sql")

@@ -178,7 +178,9 @@ response and input-validation helpers through migrations 013–016. WP2 adds
 `add_resource_type`, `update_resource_type`, `delete_resource_type`,
 `add_resource`, and `update_resource` through migrations 017–021. These five
 functions use `arkkan_api` but remain owner-only at this checkpoint; runtime
-role grants are deferred to WP5. No Python resource API or CLI is available.
+role grants are deferred to WP5. WP3 adds the four read operations through
+migrations 022–027, including three `get_resource_content` call signatures.
+These also remain owner-only until WP5. No Python resource API or CLI is available.
 
 The Stage 3 migrations still require PostgreSQL validation. Staging deployment
 and full integration validation are consolidated at the end of Stage 3.
@@ -195,9 +197,9 @@ From the configured development checkout, with the environment verified by
 This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
 superuser privileges, local environment identity, and all ordered migration
 steps without writing to the database. Review the target and the `PENDING`
-and `UNCHANGED` results. On a compliant WP1 database, the WP2 dry run should
-report migrations 001–016 unchanged and 017–021 pending. On a compliant Stage 2
-database, migrations 013–021 should be pending. Apply only after verifying the
+and `UNCHANGED` results. On a compliant WP2 database, the WP3 dry run should
+report migrations 001–021 unchanged and 022–027 pending. On a compliant Stage 2
+database, migrations 013–027 should be pending. Apply only after verifying the
 intended target and reviewing the plan:
 
 ```bash
@@ -337,7 +339,7 @@ checkout:
 ```
 
 Expect a successful environment check and all installed migration steps
-`UNCHANGED` (21 after WP2 has been applied).
+`UNCHANGED` (27 after WP3 has been applied).
 Record the backup and restore exit status and comparison outcome. Resume
 application writes only after verification. Keep the recovery database separate:
 never point `.env`, initialization, or automated tests at it. Its copied identity

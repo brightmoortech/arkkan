@@ -105,6 +105,19 @@ _API_WRITES = (
 )
 
 
+_API_READS = (
+    ("get_resource_content_mode", "get_resource_content",
+     (("slug", "text"), ("version", "text"), ("mode", "text"))),
+    ("get_resource_content_version", "get_resource_content", (("slug", "text"), ("version", "text"))),
+    ("get_resource_content_default", "get_resource_content", (("slug", "text"),)),
+    ("list_resources_matching_type", "list_resources_matching_type", (("type_slug", "text"),)),
+    ("get_resource_version_default", "get_resource_version_default", (("slug", "text"),)),
+    ("get_resource_info", "get_resource_info", (("slug", "text"),)),
+)
+_PUBLIC_FUNCTIONS = _API_WRITES + tuple((name, args, None) for _, name, args in _API_READS)
+_READ_NAMES = frozenset(name for _, name, _ in _API_READS)
+
+
 def _role_ready(connection: "Connection[Any]", role: str) -> bool:
     row = connection.execute("""
         SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
@@ -151,7 +164,7 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
     allowed_helpers = {(f"reject_{table}_change", 0) for table in _TABLES}
     allowed_helpers.update((name, len(arguments)) for name, _, arguments, _ in _API_HELPERS)
     if schema == "arkkan_api":
-        allowed_helpers = {(name, len(arguments)) for name, arguments, _ in _API_WRITES}
+        allowed_helpers = {(name, len(arguments)) for name, arguments, _ in _PUBLIC_FUNCTIONS}
     functions = connection.execute("""
         SELECT p.proname, p.pronargs FROM pg_catalog.pg_proc AS p
         JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
@@ -387,11 +400,18 @@ def _api_function_ready(
         JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
         WHERE n.nspname = %s AND p.proname = %s
     """, (schema, name)).fetchall()
+    if schema == "arkkan_api":
+        signatures = {", ".join(kind for _, kind in args)
+                      for function, args, _ in _PUBLIC_FUNCTIONS if function == name}
+        if any(row[4] not in signatures for row in rows):
+            raise ValueError(f"Conflicting API function {schema}.{name}.")
+        signature = ", ".join(kind for _, kind in arguments)
+        rows = [row for row in rows if row[4] == signature]
     if not rows:
         return False
     expected = (body, "f", True, language, ", ".join(kind for _, kind in arguments),
                 [argument for argument, _ in arguments], return_type,
-                False, schema == "arkkan_api", "v" if schema == "arkkan_api" else "i",
+                False, schema == "arkkan_api", ("s" if name in _READ_NAMES else "v") if schema == "arkkan_api" else "i",
                 False, "u", ["search_path=pg_catalog"],
                 0 if defaults is None else len(defaults.split(", ")),
                 True, True, False, defaults, True)
@@ -459,6 +479,18 @@ def _migration_list(root: Path) -> tuple[_Migration, ...]:
             filename, partial(_api_function_ready, name=name, language="plpgsql",
                               arguments=arguments, return_type="jsonb", body=parts[1],
                               schema="arkkan_api", defaults=defaults),
+            partial(_execute_sql, statement=statement),
+        ))
+    for number, (suffix, name, arguments) in enumerate(_API_READS, 22):
+        filename = f"{number:03}_{suffix}"
+        statement = (folder / f"{filename}.sql").read_text(encoding="utf-8")
+        parts = statement.split("$body$")
+        if len(parts) != 3 or not parts[1].strip():
+            raise ValueError(f"Invalid API function migration: {filename}.")
+        migrations.append(_Migration(
+            filename, partial(_api_function_ready, name=name, language="plpgsql",
+                              arguments=arguments, return_type="jsonb", body=parts[1],
+                              schema="arkkan_api"),
             partial(_execute_sql, statement=statement),
         ))
     return tuple(migrations)

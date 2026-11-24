@@ -245,3 +245,18 @@ values and object payloads or nonblank error reasons for every completed call.
 Catalog unit checks do not establish PostgreSQL syntax, catalog representation,
 locking behavior or database acceptance. Required staging execution covers the
 entire applicable suite, including the earlier-stage regressions.
+
+
+### Work Package 3: Read operations
+
+Migrations 022–027 implement four read operations, including three explicit
+`get_resource_content` signatures. Omitted version selects the default;
+explicit null/blank version is rejected. All read functions use a single
+statement snapshot and return content only through `get_resource_content`.
+The following guarded integration tests remain pending consolidated staging
+execution. The cumulative migration inventory is 27.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S3-022 | Read Operations / get_resource_content; default lookup | `test_s3_022_content_selection_matrix`: exercise all retrieval modes and call forms against missing, disabled, obsolete, enabled and default versions, with and without a fallback default; verify selected version/state/content and successful empty content. |
+| S3-023 | Read Operations; Shared validation | `test_s3_023_read_metadata_and_validation`: metadata includes every lifecycle state and empty resources without content, lists include versionless resources, timestamps use UTC, unknown targets and invalid identifiers/modes return errors. |
