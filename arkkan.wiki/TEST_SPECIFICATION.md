@@ -167,3 +167,13 @@ Run `tests/unit` in both checkouts and `tests/integration` in staging before
 Stage 2 acceptance. Record actual execution outcomes in the stage execution
 report. Collection or a simulated transaction is not evidence that PostgreSQL
 integration tests passed.
+
+### Manual local-development backup and restore
+
+The Technical Requirements, Data Architecture / Backup and Recovery, also
+require a documented basic manual procedure. See [Development Guide](DEVELOPMENT.md#manual-development-database-backup-and-restore).
+As a closeout verification, verify a successful custom-format
+backup, a restore into a new recovery database, matching identity and data,
+and unchanged active development environment. This is an operator verification,
+not an additional pytest case. Record actual execution status separately from
+the automated suite. Container recreation does not establish recovery success.

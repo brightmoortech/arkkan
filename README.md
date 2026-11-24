@@ -7,9 +7,11 @@ for authorized applications to discover and retrieve reusable prompt content.
 Consuming applications assemble resources into prompts; `arkkan` does not
 assemble prompts.
 
-**Current status:** Phase 1, Stage 1 (Project Foundation) has been implemented
-and technically validated. Resource storage, retrieval, administration, the
-public Python API, and the CLI are not yet available.
+**Current status:** Phase 1, Stage 2 (Database Foundation) is implemented.
+Development initialization and staging automated tests have passed. Formal
+Stage 2 acceptance is pending. The database structure and seven predefined
+resource types are available; resource retrieval and administration through
+the PostgreSQL API, public Python API, and CLI are not yet available.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 

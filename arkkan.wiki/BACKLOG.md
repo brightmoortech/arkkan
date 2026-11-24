@@ -20,3 +20,15 @@ All entries below are deferred; none is implemented by this document.
 | ENV-02 | Recovery diagnostics and controlled recovery routines. | Define supported recovery scenarios, protections, authorization and verification before implementation. Never silently delete persistent storage, overwrite credentials, or relabel an existing database. | Technical Requirements, Environment Provisioning and Data Architecture / Backup and Recovery. |
 
 The basic manual database backup-and-restore procedure remains a local-development requirement under Technical Requirements; it is not deferred by ENV-02. Production recovery objectives and later phases remain governed by the existing Roadmap.
+
+## Reusable workflow conventions
+
+| ID | Improvement | Intended outcome / proposed acceptance | Source |
+|---|---|---|---|
+| UX-05 | Standardize workflow status terminology. | Reconcile status labels and their semantics when consolidating reusable generation, provisioning and initialization workflows into pyprojectgen. Preserve existing behavior until that future work is specified and authorized. | Deferred by project owner during WP3 dry-run review; no current status-label changes. |
+
+## Phase 4: Production Readiness
+
+| ID | Improvement | Intended outcome / proposed acceptance | Source |
+|---|---|---|---|
+| REC-01 | Database backup and recovery utilities. | Provide separate backup and restore scripts with an operator-specified backup destination. Default to dry run; require `--apply` to execute. Validate target environment and backup integrity, prevent unintended overwrites, and verify restoration. Specify and test selective data recovery without losing subsequent legitimate transactions, complete database recovery, and full-cluster disaster recovery including required roles and credentials. Keep utilities in arkkan; possible future extraction to a standalone toolbox is not authorized implementation work. Do not include operational maintenance utilities in pyprojectgen. | Project-owner decisions during Stage 2 recovery drill; Technical Requirements, Backup and Recovery and Phase 4 Roadmap. |

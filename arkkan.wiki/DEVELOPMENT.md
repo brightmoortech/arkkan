@@ -173,8 +173,8 @@ staging.
 
 ## Application Database Initialization
 
-The Stage 2 initialization utility is implemented for validation. It does not
-provide the PostgreSQL resource API or grant its execution privileges; these
+The Stage 2 initialization utility has passed development and staging
+validation. It does not provide the PostgreSQL resource API or grant its execution privileges; these
 are Stage 3 deliverables. Use the provisioned development instance for manual
 initialization, and reserve the staging instance for automated validation.
 From the configured development checkout, with the environment verified by
@@ -217,6 +217,126 @@ committed steps remain; do not assume an interrupted commit succeeded or failed.
 The application roles are created without passwords; the operator sets their
 passwords separately before password-authenticated API or CLI use. The script
 does not create databases, provision containers, or modify environment identity.
+
+## Manual Development Database Backup and Restore
+
+This procedure creates a logical backup of the entire development database and
+restores it to a new, separate recovery database on the verified development
+PostgreSQL instance. It does not replace the active database, restore cluster-wide
+roles or passwords, or change the configured environment identity. The recovery
+database is an inspection copy, not a provisioned application or staging target.
+The procedure uses the PostgreSQL 18 client tools already in the pinned image.
+The commands below use the validated local development configuration; adjust
+only after verifying the corresponding environment settings.
+
+### Back up
+
+From the development checkout, stop application writes for the duration of the
+backup and comparison. Verify the environment before proceeding:
+
+```bash
+.venv/bin/python scripts/manage_environment.py check
+```
+
+If any command fails, stop and inspect the error before proceeding. Use the
+local Docker context. The examples use the container's local Unix socket as
+its operating-system `postgres` user and the configured database superuser.
+If local authentication is unavailable, stop; do not weaken authentication or
+change credentials to execute a backup.
+
+Run the following in your shell (use a fresh timestamped filename):
+
+```bash
+umask 077
+backup_dir="$HOME/development/data/arkkan/develop/backups"
+mkdir -p "$backup_dir"
+chmod 700 "$backup_dir"
+backup="$backup_dir/arkkan_dev_$(date +%Y%m%d_%H%M%S).dump"
+```
+
+Confirm the file does not already exist. The subshell below refuses to overwrite
+an existing archive. It uses no terminal allocation, preserving the binary dump.
+
+```bash
+(set -C; docker exec -u postgres arkkan-db-dev \
+    pg_dump --no-password -U postgres -d arkkan_dev --format=custom > "$backup")
+```
+
+Only if the command succeeds, inspect the archive catalog:
+
+```bash
+docker exec -i -u postgres arkkan-db-dev pg_restore --list < "$backup"
+```
+
+A catalog listing is not proof of recoverability. Do not use a partial archive
+from a failed backup. Keep backups outside Git and the PostgreSQL data directory;
+protect them as sensitive prompt data. This database-level dump does not contain
+cluster-wide role definitions, role passwords, host configuration, or credential
+files. Recovery onto a different cluster requires separate role and infrastructure
+preparation and is outside this local procedure.
+
+### Restore and verify
+
+Use the same shell session and the verified development container. Create a new
+empty database using `template0`; the name must not already exist. If creation
+fails, stop rather than reusing an existing database. The roles referenced by
+this dump already exist on the source cluster.
+
+```bash
+docker exec -u postgres arkkan-db-dev createdb --no-password \
+    -U postgres --maintenance-db=arkkan_dev --template=template0 \
+    arkkan_dev_recovery
+```
+
+Restore only into the new recovery database. Do not use `--clean` or `--create`.
+The restore is atomic; on failure the new database remains and requires operator
+inspection before any retry.
+
+```bash
+docker exec -i -u postgres arkkan-db-dev pg_restore --no-password \
+    -U postgres -d arkkan_dev_recovery --exit-on-error \
+    --single-transaction < "$backup"
+```
+
+Inspect both databases using these read-only queries. In each, verify the
+`development` identity, three application tables, row counts and the protected
+seed slugs. Compare results with writes still stopped; also inspect representative
+resource metadata and content if present, without publishing sensitive data.
+
+```bash
+(
+for db in arkkan_dev arkkan_dev_recovery; do
+    docker exec -u postgres arkkan-db-dev psql -X --no-password \
+        -U postgres -d "$db" -v ON_ERROR_STOP=1 \
+        -c 'SELECT current_database(), environment_type FROM arkkan_env.environment_identity;' \
+        -c 'SELECT count(*) FROM arkkan.resource_types;' \
+        -c 'SELECT count(*) FROM arkkan.resource_definitions;' \
+        -c 'SELECT count(*) FROM arkkan.resource_versions;' \
+        -c 'SELECT slug, is_system FROM arkkan.resource_types ORDER BY slug;' || exit 1
+done
+)
+```
+
+If either query sequence fails, stop and inspect before proceeding. Verify the
+original environment and its application initialization from the development
+checkout:
+
+```bash
+.venv/bin/python scripts/manage_environment.py check
+.venv/bin/python scripts/init_db.py
+```
+
+Expect a successful environment check and twelve `UNCHANGED` migration steps.
+Record the backup and restore exit status and comparison outcome. Resume
+application writes only after verification. Keep the recovery database separate:
+never point `.env`, initialization, or automated tests at it. Its copied identity
+is not independent provisioning evidence. Any eventual removal of the recovery
+copy is a separate, explicit operator action after verifying its name and target;
+this procedure does not drop any database. Retain the original backup according
+to operator needs. Full-cluster disaster recovery, retention policies and automated
+recovery remain future production-readiness work.
+
+**Validation status:** procedure documented; execution on the local Mac is pending.
 
 ## Automated Tests
 
