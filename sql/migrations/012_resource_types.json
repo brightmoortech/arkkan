@@ -1,0 +1,9 @@
+{
+  "constraints": "Describes a set of constraints that the LLM must comply with.",
+  "process": "A process defines a set of instructions that guide the LLM how to complete a specific repetitive task. It has a clear start, logic flow, input/outputs, and an end step. Examples include: *requesting user clarification*, *user driven Q&A*, etc.",
+  "rubric": "A rubric resource defines a reusable structured scoring guide with criteria.",
+  "role": "Defines the expertise, responsibilities, and expected behavior that the LLM must adopt when performing a task. For example, a software architect or a paralegal expert.",
+  "task": "Defines the objective that the LLM must achieve. It binds all the applicable resources. It is the highest order resource.",
+  "templates": "These are template documents that the prompt may instruct the LLM to load and complete such as report generation.",
+  "extensions": "A generic catch-all extension to the prompt."
+}

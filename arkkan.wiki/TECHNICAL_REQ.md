@@ -78,7 +78,7 @@ Use two local checkouts of the same Git repository and one version-controlled, p
 | Compose project | `arkkan_develop` | `arkkan_stage` |
 | PostgreSQL container | `arkkan-db-dev` | `arkkan-db-test` |
 | Host | `localhost` | `localhost` |
-| Host port (proposed; confirm availability before implementation) | `5433` | `5434` |
+| Host port (local validated configuration; externally configurable) | `5441` | `5442` |
 | Database | `arkkan_dev` | `arkkan_test` |
 | Environment identity | `development` | `staging` |
 
@@ -173,17 +173,20 @@ Include a basic, documented manual database backup-and-restore procedure during 
 Initialization is a separate privileged setup operation, **not** an `arkkan` CLI subcommand. It prepares an existing PostgreSQL database for normal API access. Use a version-controlled Python entry point, `scripts/init_db.py`, backed by ordered SQL migration files. Run it from the project root using the project's Python environment:
 
 ```bash
+python scripts/init_db.py
 python scripts/init_db.py --check
 python scripts/init_db.py --apply
 ```
 
-`--check` validates prerequisites and reports pending setup or mismatches without changing the database. `--apply` performs pending setup. Both report success or a specific failure; an invalid or unrecognized argument fails without making changes.
+The default invocation is a dry run. `--check` explicitly selects the same read-only behavior: validate prerequisites and report pending setup or mismatches without changing the database. Only `--apply` performs pending setup. These options are mutually exclusive. Report success or a specific failure; an invalid or unrecognized argument fails without making changes.
+
+Separate the project-independent initialization workflow (connection and prerequisite checks, planning, ordered execution, transaction management, verification and reporting) from application-specific migration definitions and SQL files. Each migration provides a read-only check for missing, compliant or conflicting objects, applies only missing work, and verifies its expected state before committing. The workflow uses the same checks to plan all migrations before any application changes and to verify the final state.
 
 ### Prerequisites and configuration
 
 - PostgreSQL is installed, running, and the **target database already exists**. Database server installation and database creation are external prerequisites; the script must not create or drop databases. For the Phase 1 local environments, complete Environment Provisioning first. Application initialization does not create, modify, or remove the environment identity.
 - Run initialization using the existing deployment PostgreSQL superuser. Its role name is not fixed. Do not use `arkkan_admin` or `arkkan_user` for initialization.
-- Supply the PostgreSQL connection settings and privileged client credentials defined in Data Architecture. `PGDATABASE` and `PGUSER` are required; run using the project virtual environment. Never pass passwords as script options.
+- Supply the PostgreSQL connection settings and privileged client credentials defined in Data Architecture. `PGDATABASE` and `PGUSER` are required; run using the project virtual environment. For a configured local checkout, initialization reads `.env` without executing it, rejects conflicting process connection settings, and verifies its stored environment identity without changing it. Otherwise, supply standard PostgreSQL connection settings through the process environment. Never pass passwords as script options.
 
 ### Execution sequence
 
@@ -197,11 +200,11 @@ python scripts/init_db.py --apply
 
 - Initialization is idempotent: rerunning `--apply` with the same migration set creates no duplicate objects or seed rows. It must not overwrite administrator-edited type descriptions, including descriptions of system types.
 - Seed reconciliation: insert missing system types; verify the `is_system` flag for existing seeded slugs. If an existing row has a conflicting flag or an incompatible definition, stop with an actionable error rather than silently changing it. The description from the seed file is used **only on initial insertion**.
-- A failed setup step returns a nonzero exit code and leaves its changes rolled back. Do not continue to later steps. `--check` never writes.
+- A failed setup step returns a nonzero exit code and leaves its changes rolled back. Do not continue to later steps. The default dry run and `--check` never write.
 - Create `arkkan_admin` and `arkkan_user` as roles that can log in, without embedding passwords in SQL or source files. A privileged operator must set their passwords separately, using PostgreSQL's interactive password-setting facility (for example, `psql`'s `\password` command), before password-authenticated CLI use. Initialization must not overwrite existing role credentials.
 - Restrict access to API functions as specified in **Security**. The setup script must not grant table DML privileges to normal API roles.
 
-**Acceptance:** Automated tests must cover clean initialization, `--check` without writes, idempotent reruns, the seven seeded slugs and their functional descriptions, protection of seeded types, preservation of edited descriptions, conflicting-object failures, and migration rollback. Tests operate against an isolated test database, not a database containing user data.
+**Acceptance:** Automated tests must cover clean initialization, the default dry run and `--check` without writes, idempotent reruns, the seven seeded slugs and their functional descriptions, protection of seeded types, preservation of edited descriptions, conflicting-object failures, and migration rollback. Tests operate against an isolated test database, not a database containing user data.
 
 ## API
 
@@ -714,7 +717,7 @@ Implement Phase 1 in the following stages. Supply the coding LLM with the comple
 | Stage | Deliverable | Validation gate |
 |---|---|---|
 | **1. Project Foundation** | Python project structure, pinned dependencies, virtual environment guidance, configuration, and test harness. | Package installs in a clean environment; configuration validation and initial tests run. |
-| **2. Database Foundation** | Isolated development and staging PostgreSQL environments, shared Compose configuration, `scripts/manage_environment.py`, environment identity and test safety guard; database roles, schemas, tables, constraints, triggers, seed data, and the initial `scripts/init_db.py` setup framework. | Environment provisioning, container recreation with persistent data, identity protection, driver compatibility, and safety tests pass; schema and seed tests pass in the isolated staging PostgreSQL database; `--check` is read-only and applicable setup steps are idempotent. Full initialization is not yet complete. |
+| **2. Database Foundation** | Isolated development and staging PostgreSQL environments, shared Compose configuration, `scripts/manage_environment.py`, environment identity and test safety guard; database roles, schemas, tables, constraints, triggers, seed data, and the initial `scripts/init_db.py` setup framework. | Environment provisioning, container recreation with persistent data, identity protection, driver compatibility, and safety tests pass; schema and seed tests pass in the isolated staging PostgreSQL database; the default dry run and `--check` are read-only and applicable setup steps are idempotent. Full initialization is not yet complete. |
 | **3. PostgreSQL API** | All specified SQL functions, grants, and remaining initialization migrations. | Function integration and role-permission tests pass; full clean initialization, rerun, and failure/rollback tests pass. |
 | **4. Python API** | Python wrappers for the PostgreSQL functions and the common JSON response contract. | Unit and PostgreSQL integration tests pass for all specified operations and errors. |
 | **5. CLI** | The `arkkan` command and subcommands, options, help, authentication, and output handling defined in the CLI section. | CLI argument, output, authorization, and end-to-end command tests pass. |

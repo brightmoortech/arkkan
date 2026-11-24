@@ -122,8 +122,48 @@ operations and cleanup. Tests fail closed if staging is unavailable.
 | S2-030 | Data Storage and Persistence; Testing and Acceptance | `test_s2_030_container_recreation_preserves_storage`: after staging verification, stop/remove only its container and recreate with the same settings; verify cluster identity, marker data, role, environment identity, connectivity and unchanged unrelated containers; clean up only guarded test fixtures. |
 
 Execute the integration suite in the staging checkout at the selected Git
-revision. Application schema, seed data and initialization tests are still
-required in the following work package. In particular, testing application
-schema resets without affecting environment identity requires the application
-schema and is deferred until that work package. This is not the complete Stage
-2 test suite.
+revision. The following application database foundation cases extend that suite.
+
+### Application database foundation: unit tests
+
+Cases in `tests/unit/test_initialization.py` use temporary configuration files,
+subprocess argument checks, and simulated transactions, without connecting to
+PostgreSQL.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S2-051 | Initialization / Execution sequence; Reruns and failures | `test_s2_051_dry_run_read_only`: inspect pending and existing steps in a read-only transaction, with no changes. |
+| S2-052 | Initialization / Execution sequence | `test_s2_052_late_conflict_prevents_writes`: a conflict in a later step prevents any apply operation. |
+| S2-053 | Initialization / Reruns and failures | `test_s2_053_step_failure_rolls_back_and_stops`: failed step rolls back, earlier commits remain, later steps are not attempted. |
+| S2-054 | Initialization / Reruns and failures | `test_s2_054_apply_rerun_reuses_existing_objects`: apply only missing steps; rerun does not repeat completed steps. |
+| S2-055 | Initialization / Execution sequence | `test_s2_055_workflow_guards`: reject empty or duplicate steps, concurrent apply, or a non-idle/non-autocommit connection. |
+| S2-056 | Initialization (Phase 1) | `test_s2_056_command_arguments_no_connection`: help, incompatible flags, unknown arguments and abbreviated flags are handled without connecting. |
+| S2-057 | Initialization / Prerequisites and configuration; Configuration Management | `test_s2_057_connection_settings`: use explicit process settings or local configuration, preserve credentials and avoid creating data directories. |
+| S2-058 | Initialization / Prerequisites and configuration; Security | `test_s2_058_reject_unsafe_configuration`: reject missing settings, inappropriate role or database, unsafe overrides and credential files, and conflicting local settings without disclosing credentials. |
+| S2-059 | Initialization / Execution sequence | `test_s2_059_migration_manifest_and_seed_mapping`: verify ordered migration files and the exact seven functional descriptions in the seed manifest. |
+| S2-068 | Initialization / Prerequisites and configuration; Security | `test_s2_068_connection_prerequisites`: verify connection options and read-only checks of the selected database, role, PostgreSQL version, superuser status and primary status; reject mismatches before yielding the connection. |
+
+### Application database foundation: integration tests
+
+Cases in `tests/integration/test_db_initialization.py` run only against the
+verified staging PostgreSQL instance. The fixture resets known application
+objects and roles, with restrictive drops in a transaction and guarded cleanup.
+Environment identity and persistent storage are not reset. These tests verify
+the Stage 2 foundation; full resource API initialization and lifecycle policy
+tests remain subject to Stage 3.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S2-060 | Initialization (Phase 1); Environment Identity | `test_s2_060_clean_initialization_and_dry_run`: both dry-run invocations leave catalogs and identity unchanged; apply creates the expected schemas, roles, tables and seven seed records; rerun preserves object identifiers. |
+| S2-061 | Initialization / Reruns and failures | `test_s2_061_seed_reconciliation_preserves_metadata`: restore a missing seed without replacing existing seed descriptions or custom types. |
+| S2-062 | `arkkan` Schema / Database integrity; Testing and Acceptance | `test_s2_062_schema_constraints`: enforce unique identifiers, foreign keys, required fields, nonblank identifiers, valid states and the single-default index; generate UUIDs and timestamps, preserve opaque identifiers and empty content. |
+| S2-063 | `arkkan` Schema / Database integrity; Testing and Acceptance | `test_s2_063_immutability_and_editable_fields`: reject changes to primary keys and every immutable field; permit editing specified mutable metadata. |
+| S2-064 | Security; Initialization / Reruns and failures | `test_s2_064_application_roles_have_no_direct_access`: verify login roles have no elevated attributes, direct table privileges or helper execution access; reject unauthorized data and schema operations. |
+| S2-065 | Initialization / Execution sequence | `test_s2_065_conflict_before_any_apply`: unexpected later-schema objects prevent all application writes, including earlier role creation. |
+| S2-066 | Initialization / Execution sequence; Database integrity; Security | `test_s2_066_existing_definition_conflicts`: reject conflicting catalog definitions, disabled triggers, grants, role attributes and system flags without silently repairing them. |
+| S2-067 | Initialization / Reruns and failures | `test_s2_067_actual_step_rollback`: inject a failure after DDL, verify actual rollback of the failed step and retention of the earlier committed step; later steps remain unapplied. |
+
+Run `tests/unit` in both checkouts and `tests/integration` in staging before
+Stage 2 acceptance. Record actual execution outcomes in the stage execution
+report. Collection or a simulated transaction is not evidence that PostgreSQL
+integration tests passed.

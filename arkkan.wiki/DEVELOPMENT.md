@@ -37,14 +37,14 @@ external persistent storage to `/var/lib/postgresql`. Development and staging
 use independent Compose projects, containers and data directories as specified
 in Technical Requirements, under Environment Architecture and Data Architecture.
 Provision each PostgreSQL instance through the environment management utility
-below. Application database initialization is a separate operation and is not
-yet implemented.
+below. Application database initialization is a separate operation, described
+under Application Database Initialization.
 
 For ordinary application connections, the configuration code uses standard
 libpq process environment variables. `PGDATABASE` and `PGUSER` are required;
-optional values follow libpq defaults when omitted. The application does not
-load `.env` automatically. The provisioning validator does not open a database
-connection or alter any files.
+optional values follow libpq defaults when omitted. The resource API configuration helper does not
+load `.env` automatically. The provisioning configuration validator does not
+open a database connection or alter any files.
 
 ## PostgreSQL Environment Provisioning
 
@@ -171,6 +171,53 @@ to advance a pinned staging revision. Bootstrap independently, supply its own
 run `check` before the database test suite. Do not modify source files in
 staging.
 
+## Application Database Initialization
+
+The Stage 2 initialization utility is implemented for validation. It does not
+provide the PostgreSQL resource API or grant its execution privileges; these
+are Stage 3 deliverables. Use the provisioned development instance for manual
+initialization, and reserve the staging instance for automated validation.
+From the configured development checkout, with the environment verified by
+`manage_environment.py check`, run:
+
+```bash
+.venv/bin/python scripts/init_db.py
+```
+
+This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
+superuser privileges, local environment identity, and all ordered migration
+steps without writing to the database. Review the target and the `PENDING`
+and `UNCHANGED` results. Apply only after verifying the intended target and
+reviewing the plan:
+
+```bash
+.venv/bin/python scripts/init_db.py --apply
+```
+
+The utility reads the checkout's existing `.env` and its configured client
+password file. Do not create new credentials for initialization. For operation
+without a local `.env`, supply the standard libpq process environment settings
+and protected client password file; the target database must already exist.
+Never supply passwords on the command line. Conflicting process connection
+settings are rejected when `.env` is present.
+
+The project-independent workflow is in
+[`_migration_workflow.py`](../src/arkkan/_migration_workflow.py), with connection
+prerequisites in [`_initialization_connection.py`](../src/arkkan/_initialization_connection.py).
+[`_db_migrations.py`](../src/arkkan/_db_migrations.py) defines the ordered
+application-specific migration checks and actions using
+[`sql/migrations/`](../sql/migrations/). Add new migration steps only within the
+authorized implementation stage. No migration tracking table is used.
+
+`--apply` reuses compliant objects and commits each successfully verified
+step. It stops on conflicting definitions instead of replacing them. Existing
+seed descriptions and role credentials are preserved. After failure, inspect
+the reported step and run the dry run again before retrying. Previously
+committed steps remain; do not assume an interrupted commit succeeded or failed.
+The application roles are created without passwords; the operator sets their
+passwords separately before password-authenticated API or CLI use. The script
+does not create databases, provision containers, or modify environment identity.
+
 ## Automated Tests
 
 Run unit tests in development or staging without starting PostgreSQL:
@@ -204,8 +251,12 @@ stops and removes only the verified staging container, recreates it using
 own test fixtures. Persistent storage is never deleted. Do not run these tests
 against development or production.
 
-The test suite currently covers environment management; application schema and
-API tests are added within their authorized stages.
+Application initialization integration tests reset only the known application
+objects and roles in the verified staging instance; do not use staging for
+data that must be retained. Resets preserve the independent environment
+identity and persistent storage, and reject unexpected dependencies rather
+than using cascading drops. Public API tests are added in their authorized
+stage.
 
 ## Project Documentation
 
