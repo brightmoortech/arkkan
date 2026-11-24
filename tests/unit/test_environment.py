@@ -197,3 +197,22 @@ def test_s2_011_example_contract() -> None:
     assert set(settings) == _ALLOWED
     assert set(_REQUIRED) <= set(settings)
     assert all(not value for key, value in settings.items() if key != "PGHOST")
+
+
+@pytest.mark.parametrize("key", ["POSTGRES_PASSWORD_FILE", "PGPASSFILE"])
+@pytest.mark.parametrize("problem", ["empty", "other_checkout"])
+def test_s2_039_credential_file_safety(
+    environment: tuple[Path, dict[str, str]], key: str, problem: str,
+) -> None:
+    root, settings = environment
+    if problem == "empty":
+        Path(settings[key]).write_text("")
+    else:
+        other = root.parent / "other_checkout"
+        (other / ".git").mkdir(parents=True)
+        file = other / "credential"
+        file.write_text("synthetic-test-data")
+        file.chmod(0o600)
+        settings[key] = str(file)
+    with pytest.raises(ValueError, match="empty password file|outside repository"):
+        _validate_environment(settings, root)

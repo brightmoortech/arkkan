@@ -84,6 +84,6 @@ fi
 "${VENV_PYTHON}" -m pip install --no-build-isolation --no-deps -e .
 "${VENV_PYTHON}" -m pip check
 
-"${VENV_PYTHON}" -m pytest
+"${VENV_PYTHON}" -m pytest tests/unit
 
 echo "[OK] Bootstrap complete"

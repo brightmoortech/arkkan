@@ -66,17 +66,21 @@ def _credential_file(value: str, root: Path, variable: str) -> Path:
         )
     if not os.access(path, os.R_OK):
         raise ValueError(f"{variable} must be readable by the operator.")
-    if path.is_relative_to(root.resolve()):
+    if not info.st_size:
+        raise ValueError(f"{variable} must not identify an empty password file.")
+    if path.is_relative_to(root.resolve()) or any(
+        (parent / ".git").exists() for parent in path.parents
+    ):
         raise ValueError(
-            f"{variable} must be outside the repository checkout."
+            f"{variable} must be outside repository checkouts."
         )
     return path
 
 
-def _validate_environment(
+def _validate_configuration(
     settings: Mapping[str, str], root: Path,
 ) -> dict[str, str]:
-    """Validate provisioning settings without modifying files."""
+    """Validate and resolve configuration without requiring credential files."""
     if set(settings) - _ALLOWED:
         raise ValueError("Unsupported environment configuration key.")
     if not all(_is_literal(value) for value in settings.values()):
@@ -131,23 +135,26 @@ def _validate_environment(
         )
     if data_dir.exists() and not data_dir.is_dir():
         raise ValueError("POSTGRES_DATA_DIR must identify a directory.")
-    password_file = _credential_file(
-        settings["POSTGRES_PASSWORD_FILE"], root, "POSTGRES_PASSWORD_FILE"
-    )
-    passfile = _credential_file(
-        settings.get("PGPASSFILE") or "~/.pgpass", root, "PGPASSFILE"
-    )
-    if password_file.samefile(passfile):
-        raise ValueError(
-            "Provisioning and client password files must be separate."
-        )
-    if (
-        password_file.is_relative_to(data_dir)
-        or passfile.is_relative_to(data_dir)
+    password_file = _resolved_path(settings["POSTGRES_PASSWORD_FILE"], root)
+    passfile = _resolved_path(settings.get("PGPASSFILE") or "~/.pgpass", root)
+    for variable, path in (
+        ("POSTGRES_PASSWORD_FILE", password_file), ("PGPASSFILE", passfile),
     ):
-        raise ValueError(
-            "Password files must be outside PostgreSQL data storage."
-        )
+        if path.is_relative_to(checkout) or any(
+            (parent / ".git").exists() for parent in path.parents
+        ):
+            raise ValueError(f"{variable} must be outside repository checkouts.")
+        if path.is_relative_to(data_dir) or data_dir.is_relative_to(path):
+            raise ValueError(
+                "Password files must be outside PostgreSQL data storage."
+            )
+        if path.exists() and not path.is_file():
+            raise ValueError(f"{variable} must identify a regular password file.")
+    if (
+        password_file.is_relative_to(passfile)
+        or passfile.is_relative_to(password_file)
+    ):
+        raise ValueError("Provisioning and client password files must be separate.")
     return {
         **settings,
         "PGPORT": str(int(port)),
@@ -155,3 +162,17 @@ def _validate_environment(
         "POSTGRES_PASSWORD_FILE": str(password_file),
         "PGPASSFILE": str(passfile),
     }
+
+
+def _validate_environment(
+    settings: Mapping[str, str], root: Path,
+) -> dict[str, str]:
+    """Validate configuration and required credential files without writes."""
+    resolved = _validate_configuration(settings, root)
+    password_file = _credential_file(
+        resolved["POSTGRES_PASSWORD_FILE"], root, "POSTGRES_PASSWORD_FILE"
+    )
+    passfile = _credential_file(resolved["PGPASSFILE"], root, "PGPASSFILE")
+    if password_file.samefile(passfile):
+        raise ValueError("Provisioning and client password files must be separate.")
+    return resolved

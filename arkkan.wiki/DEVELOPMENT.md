@@ -13,7 +13,7 @@ Use Python 3.12.10 on macOS for Phase 1. From the repository root, run:
 
 The bootstrap script creates or reuses `.venv`, verifies its Python version,
 installs pinned dependencies, installs the package in editable mode, checks
-installed dependency compatibility, and runs the automated tests. Recreate
+installed dependency compatibility, and runs the unit tests. Recreate
 virtual environments locally rather than copying them between machines.
 
 Python is pinned in `.python-version` and `pyproject.toml`. Installation tools
@@ -31,18 +31,14 @@ checkout has its own ignored `.env` file. For local provisioning, use literal
 quotes, interpolation or inline comments. Provisioning requires explicit
 connection and infrastructure settings. Paths can be absolute, checkout-relative
 or start with `~/`; the provisioning configuration validator resolves them.
-Keep both password files outside the checkout, separate from one another and
-from PostgreSQL data, with file permissions `0600`. Never store password values
-in `.env`.
 
 The shared [Compose definition](../compose.yaml) pins PostgreSQL 18.7 and binds
 external persistent storage to `/var/lib/postgresql`. Development and staging
 use independent Compose projects, containers and data directories as specified
 in Technical Requirements, under Environment Architecture and Data Architecture.
-The environment management utility and database initialization are not yet
-implemented in this work package. Do not start the database manually using the
-new Compose definition; provisioning will be verified through the environment
-management utility once available.
+Provision each PostgreSQL instance through the environment management utility
+below. Application database initialization is a separate operation and is not
+yet implemented.
 
 For ordinary application connections, the configuration code uses standard
 libpq process environment variables. `PGDATABASE` and `PGUSER` are required;
@@ -50,20 +46,128 @@ optional values follow libpq defaults when omitted. The application does not
 load `.env` automatically. The provisioning validator does not open a database
 connection or alter any files.
 
-## Automated Tests
+## PostgreSQL Environment Provisioning
 
-After bootstrap, run from the repository root:
+### Local configuration and credentials
+
+Use the development checkout for changes and a separate staging checkout of a
+committed revision for validation. Bootstrap each checkout independently. Copy
+`.env.example` to `.env` if `.env` does not already exist, then supply values
+for that environment. The approved development and staging values are listed
+in Technical Requirements, under Environment Architecture. Choose the initial
+PostgreSQL superuser name through `PGUSER`; it is not fixed by `arkkan`.
+
+The operator supplies two separate credential files outside the repository
+checkout and PostgreSQL storage, each with permissions `0600`. Use a single-line password
+(with Unix line endings if a newline is present) in the provisioning file and
+the corresponding libpq entry in the client password file (`PGPASSFILE`, or
+`~/.pgpass` by default). Reuse existing valid credential files; the utility
+never creates, changes or synchronizes credentials.
+
+The client password file uses the following format:
+
+```text
+host:port:database:user:password
+```
+
+Replace the field names with the actual connection values and password. Escape
+literal colons and backslashes in password-file fields with a backslash. Do not
+put passwords in `.env`, shell commands, or Git. On initial provisioning, the
+passwords must match. Changing the provisioning file does not change a stored
+database password.
+
+Set `POSTGRES_DATA_DIR` to the approved external storage location for the
+selected environment, not a directory inside the checkout. Use the designated
+Compose project, container, port, database and environment identity in `.env`.
+The provisioning utility reads the local file directly without sourcing it as
+shell code. Do not set additional libpq environment variables such as
+`PGPASSWORD` or `PGSERVICE` for these operations. Select a local Docker context;
+remote Docker endpoints are not supported by this local provisioning utility.
+
+### Provision and verify
+
+With Docker Desktop running, execute from the configured checkout after
+supplying `.env`, even if the credential files do not yet exist:
 
 ```bash
-.venv/bin/python -m pytest
+.venv/bin/python scripts/manage_environment.py setup
+```
+
+The `setup` command validates the paths and checks for infrastructure conflicts before
+creating missing PostgreSQL storage and credential-parent directories. Existing
+valid directories are reused without changing their permissions. If credentials
+are missing, `setup` reports the required file paths and permissions and stops
+without starting a container or initializing a database. Supply the missing
+files as described above, then rerun `setup`. No manual directory or container
+creation is required.
+
+Before starting PostgreSQL, `setup` checks the driver and client password-file
+entry. For a new database, it verifies that the initial passwords match before
+starting the container. It creates or starts the designated container as needed
+and verifies password-file SCRAM authentication.
+
+`setup` establishes the immutable environment identity only when provisioning
+new empty storage. For an existing cluster, it verifies the stored identity and
+uses the current client credential without requiring it to match the original
+provisioning password. After `setup` succeeds, verify the environment:
+
+```bash
+.venv/bin/python scripts/manage_environment.py check
+```
+
+The `check` command verifies the running instance and stored identity without
+provisioning or modifying data. Both commands can be rerun against a valid
+environment. Neither command deletes containers, persistent storage or
+credentials, or modifies credential file permissions.
+
+If provisioning fails, inspect the reported error before taking further action.
+An existing cluster with a missing or mismatched identity is rejected, including
+when a first provisioning attempt created storage but did not establish the
+identity. Do not delete storage or relabel an existing database to bypass this
+check. The utility does not perform recovery or password rotation.
+
+### Staging validation
+
+Prepare the staging checkout at the committed development revision with its
+own `.env` and Python environment. Follow the same `setup` and credential
+provisioning sequence in that checkout, then run `check` before the database
+test suite. Do not modify source files in staging.
+
+## Automated Tests
+
+Run unit tests in development or staging without starting PostgreSQL:
+
+```bash
 .venv/bin/python -m pytest tests/unit
 ```
 
-The first command runs all collected tests; the second runs only unit tests.
-The current unit suite also verifies that the pinned Psycopg binary driver
-imports. It does not require Docker, a database connection or actual password
-files. Database integration and end-to-end tests will be introduced within
-their authorized implementation scope.
+Bootstrap runs the same unit suite, including the pinned Psycopg binary import
+check. Unit tests use temporary files and test doubles instead of real database
+connections or Docker operations.
+
+After provisioning staging, run the complete suite from the staging checkout:
+
+```bash
+.venv/bin/python -m pytest -v
+```
+
+To run only the database integration suite:
+
+```bash
+.venv/bin/python -m pytest -v tests/integration
+```
+
+Database tests require the designated, verified staging environment. A shared
+safety guard checks the Docker target, database connection and stored identity
+before the tests and their database operations. Missing or unsafe configuration
+fails the tests rather than skipping them. The container persistence test
+stops and removes only the verified staging container, recreates it using
+`setup`, verifies data, roles, identity and connectivity, and removes only its
+own test fixtures. Persistent storage is never deleted. Do not run these tests
+against development or production.
+
+The test suite currently covers environment management; application schema and
+API tests are added within their authorized stages.
 
 ## Project Documentation
 
