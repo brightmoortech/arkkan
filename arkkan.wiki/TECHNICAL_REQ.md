@@ -1,14 +1,14 @@
 # `arkkan` Technical Requirements
 
-This document specifies the PostgreSQL schema, API, security, deployment, and tests for `arkkan`. `FUNCTIONAL_REQ.md` defines resource purposes, lifecycle policies, and role permissions. PostgreSQL functions enforce the business rules; the Python API calls those functions.
+This document specifies the architecture, PostgreSQL schema, API, security, deployment, and tests for `arkkan`. `FUNCTIONAL_REQ.md` defines resource purposes, lifecycle policies, and role permissions. PostgreSQL functions enforce the business rules; the Python API calls those functions.
 
 ## Technology
 
-- PostgreSQL: storage, integrity constraints, permissions, transactions, and API functions.
-- Python: API used by workflows and Python-based programs.
+- PostgreSQL: storage, integrity constraints, permissions, transactions, and API functions. PostgreSQL 18 is the initial development and validation baseline; pin the exact release. Earlier versions are not considered supported until validated.
+- Python: API used by workflows and Python-based programs. Retain Python 3.12.10; use Psycopg 3 (`psycopg[binary]`), pinned to an exact version with binary availability verified for macOS ARM64 and the target Linux architecture. Validate installation, import, PostgreSQL 18 connectivity, and password-file authentication on macOS before database implementation; validate Linux installation in Phase 2. Do not introduce an ORM.
 - Linux: deployment runtime.
 - macOS: development and initial testing.
-- Docker: container deployment and integration tests.
+- Docker: isolated PostgreSQL infrastructure for Phase 1 development and staging; container deployment of `arkkan` and container integration tests in Phase 2.
 
 Consuming software, not `arkkan`, assembles retrieved resources into prompts. An HTTP service, graphical UI, and LLM execution are outside initial scope.
 
@@ -66,6 +66,108 @@ A Resource Definition can be explicitly deleted when **it has no versions** or *
 - Use `BEFORE UPDATE` triggers to reject changes to immutable columns and all primary keys. The immutable columns beyond primary keys are: `resource_types.slug`, `resource_types.is_system`, `resource_definitions.slug`, `resource_definitions.type_id`, `resource_versions.resource_id`, `resource_versions.version`, `resource_versions.content`, and `resource_versions.created_at`.
 - No API may provide operations that bypass PostgreSQL immutability rules.
 
+## Environment Architecture
+
+The Phase 1 application runs natively on macOS and connects to PostgreSQL through libpq settings. PostgreSQL deployment is independent of application deployment; no application mode or environment-specific application code is required.
+
+Use two local checkouts of the same Git repository and one version-controlled, parameterized `compose.yaml` at the repository root. Provision separate PostgreSQL instances using the same pinned image. Do not modify unrelated Docker infrastructure.
+
+| Setting | Development | Staging |
+|---|---|---|
+| Checkout | `develop/arkkan/` | `stage/arkkan/` |
+| Compose project | `arkkan_develop` | `arkkan_stage` |
+| PostgreSQL container | `arkkan-db-dev` | `arkkan-db-test` |
+| Host | `localhost` | `localhost` |
+| Host port (proposed; confirm availability before implementation) | `5433` | `5434` |
+| Database | `arkkan_dev` | `arkkan_test` |
+| Environment identity | `development` | `staging` |
+
+Each checkout has independent configuration, Python runtime, PostgreSQL instance, and persistent storage, as defined in Data Architecture.
+
+Development is the only checkout used to modify source code. Staging validates a specific committed Git revision, using its own configuration and Python environment. Correct defects in development and deploy the revised commit to staging. Staging infrastructure remains stable across software revisions. See `TESTING.md` for execution and isolation rules.
+
+### Environment Provisioning
+
+Provide `scripts/manage_environment.py`, a shared environment management utility run from the project root using the project's Python environment:
+
+```bash
+python scripts/manage_environment.py setup
+python scripts/manage_environment.py check
+```
+
+- `setup`: validate local configuration and credential file prerequisites before taking action; provision or start the designated PostgreSQL infrastructure, verify database readiness and connectivity, establish or verify the environment identity, and report the result.
+- `check`: verify configuration, infrastructure status, readiness, connectivity, and environment identity without making changes.
+- Both commands must be safe to rerun. Reject missing, invalid, or conflicting configuration rather than silently substituting environment-specific values. Reject conflicting existing infrastructure without overwriting existing data or identity. Never create or overwrite credentials, automatically delete containers, volumes or database files, or modify unrelated containers.
+- Report actionable diagnostic information without exposing credentials or prompt content. Application database initialization remains a separate operation through `scripts/init_db.py`.
+
+Comprehensive solution health checks, structured health reports, recovery diagnostics, and controlled recovery routines are backlog items; their implementation phase remains to be determined consistently with the Roadmap. Do not implement them in Stage 2.
+
+## Data Architecture
+
+### Data Inventory
+
+| Data category | Source and storage | Consumer or owner |
+|---|---|---|
+| Resource definitions, versions, types and prompt content | PostgreSQL `arkkan` schema in persistent PostgreSQL storage | PostgreSQL API; authorized applications through the Python API or CLI |
+| Database roles, authentication state and database configuration stored in the cluster | Persistent PostgreSQL storage | PostgreSQL; privileged operator |
+| Environment identity | `arkkan_env.environment_identity` in the target database | Environment management utility and automated test safety guard |
+| Local environment configuration | Operator-supplied `.env` for each checkout | Docker Compose, environment management utility and processes using libpq connection settings |
+| PostgreSQL provisioning password | External file identified by `POSTGRES_PASSWORD_FILE` | PostgreSQL container initialization |
+| PostgreSQL connection credentials | Client password file identified by `PGPASSFILE` or the libpq default | Psycopg and PostgreSQL client tools |
+| Software, dependency manifests, configuration templates, Compose definition, migration SQL and seed definitions | Version-controlled repository | Development, provisioning and application initialization |
+| Test fixtures and test execution evidence | Version-controlled tests and project documentation (`arkkan.wiki/`); temporary test state in staging PostgreSQL or temporary filesystem directories | Automated test harness and reviewers |
+| Audit log data (planned, Phase 3) | Future PostgreSQL audit log schema | Authorized audit consumers; contracts remain to be defined |
+
+### Data Storage and Persistence
+
+All containers must be disposable. Removing and recreating a container must not lose persistent data, database roles, environment identity or configuration. Reproduce containers from version-controlled definitions and pinned images; keep persistent data, environment configuration and credentials outside containers.
+
+Bind-mount PostgreSQL storage from an externally configured `POSTGRES_DATA_DIR` into the pinned PostgreSQL image's supported persistent storage location. Development and staging must use independent storage directories outside their software checkouts, under the following local directory convention:
+
+| Environment | PostgreSQL storage |
+|---|---|
+| Development | `Development/data/arkkan/develop/postgres/` |
+| Staging | `Development/data/arkkan/stage/postgres/` |
+| Production | Operator-defined persistent location; may be `mnt/postgres/` within a persistent deployment directory |
+
+`Development/` denotes the local workspace root, not a hardcoded application path. Resolve the configured storage location independently of disposable containers and, for development and staging, independently of software checkouts. Production storage layout is finalized during deployment planning; upgrades must not remove its persistent storage. Do not share storage between PostgreSQL instances. Environment management must never automatically delete persistent storage.
+
+### Data Flows
+
+1. The operator supplies environment configuration and protected credential files. The environment management utility validates the selected configuration, and Docker Compose uses the infrastructure settings to provision or start the designated PostgreSQL instance with its external storage.
+2. On first initialization of empty PostgreSQL storage, the container uses the provisioning password file to establish the initial superuser credential. PostgreSQL retains database state and credentials in its persistent storage. The environment management utility connects to the target database using privileged client connection settings to establish or verify environment identity.
+3. Application initialization uses the deployment superuser's client credentials and ordered migration and seed files to create the application schemas, roles and data. It does not create or change environment identity.
+4. Consuming software or the CLI calls the Python API, which uses Psycopg and the configured client credentials to call PostgreSQL API functions. PostgreSQL enforces resource policies and returns JSONB; Python returns the decoded JSON object. Consuming applications assemble prompts, not `arkkan`.
+5. Automated database tests use staging connection settings and verify the independently stored environment identity before test execution, setup or cleanup. Test data is established by the test harness and evidence is retained under the approved testing governance.
+
+### Configuration Management
+
+Maintain one version-controlled, secret-free `.env.example` defining the application connection and Compose provisioning configuration contract. Each checkout has its own local `.env` and `.venv/`, excluded from Git. Load the selected local configuration into the execution environment. Environment-specific values, including database names, storage and credential paths, must not be hardcoded in source code. The production database name is determined during deployment planning.
+
+Use standard PostgreSQL/libpq settings for connections: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSFILE` when a password file other than the libpq default is used. Initialization and CLI operation require `PGDATABASE` and `PGUSER`; initialization defaults `PGPORT` to `5432`, and CLI host and port defaults follow libpq. Provisioning uses the explicitly configured environment settings and rejects missing, invalid or conflicting values rather than silently substituting environment-specific values. Configuration must distinguish the Compose project, instance, target database, storage location and expected environment identity. The project supplies a pinned Python dependency manifest; CLI/API and setup tooling run in the corresponding project virtual environment.
+
+### Credential Management
+
+Keep passwords out of `.env`; it contains non-sensitive settings and credential file paths. Use separate protected local files for container provisioning (`POSTGRES_PASSWORD_FILE`) and PostgreSQL client authentication (`PGPASSFILE`, or `~/.pgpass` by default on macOS and Linux). Client credentials must match the actual PostgreSQL role credentials used for a connection. Separate privileged setup credentials from ordinary API credentials.
+
+The provisioning password file establishes the initial superuser password when PostgreSQL storage is first initialized. Recreating the container against existing storage retains the existing database password; editing the provisioning file does not rotate it. Environment management reports authentication failures rather than attempting automatic password synchronization. Password rotation is the operator's responsibility. Credential ownership, protection and access restrictions are defined in Security.
+
+### Environment Identity
+
+Provision `arkkan_env.environment_identity` independently of the application schemas. It contains exactly one record identifying the database as `development`, `staging`, or `production`. Enforce the singleton and allowed values in PostgreSQL; establish the record during initial environment provisioning. The record is immutable after creation; protection and privileged access are governed by Security.
+
+On subsequent `setup` runs verify that the stored identity matches the configured environment. Abort on any mismatch; never overwrite an existing identity. A missing, invalid, or unreadable identity in an existing provisioned environment must not be treated as permission to recreate it. `check` verifies the identity without creating it.
+
+Keep this schema independent of `arkkan` and `arkkan_api` so that application initialization tests can start without either application schema and safety verification can occur before any application reset. Automated database tests, setup, and cleanup must verify the designated staging instance and its stored `staging` identity before proceeding. The guard must fail closed and have no force option or bypass. See `TESTING.md`, Section 5, for test safety enforcement.
+
+### Data Lifecycle
+
+Resource Metadata and Resource Versions follow the creation, modification, state transition and deletion contracts specified in the `arkkan` Schema and API sections. PostgreSQL is the authoritative store. Application initialization seeds protected resource types without overwriting administrator-edited descriptions. Staging tests establish and reset application schema and test data to known states as required; they must preserve environment identity. Persistent storage is not disposable merely because its container is disposable. Audit log data lifecycle and retention remain to be specified in Phase 3.
+
+### Backup and Recovery
+
+Include a basic, documented manual database backup-and-restore procedure during local development. Container recreation is not a substitute for backup or recovery. Production recovery objectives, retention, automated recovery, replication and failover remain to be defined during production readiness (Phase 4).
+
 ## Initialization (Phase 1)
 
 Initialization is a separate privileged setup operation, **not** an `arkkan` CLI subcommand. It prepares an existing PostgreSQL database for normal API access. Use a version-controlled Python entry point, `scripts/init_db.py`, backed by ordered SQL migration files. Run it from the project root using the project's Python environment:
@@ -79,11 +181,9 @@ python scripts/init_db.py --apply
 
 ### Prerequisites and configuration
 
-- PostgreSQL is installed, running, and the **target database already exists**. Database server installation and database creation are external prerequisites; the script must not create or drop databases.
+- PostgreSQL is installed, running, and the **target database already exists**. Database server installation and database creation are external prerequisites; the script must not create or drop databases. For the Phase 1 local environments, complete Environment Provisioning first. Application initialization does not create, modify, or remove the environment identity.
 - Run initialization using the existing deployment PostgreSQL superuser. Its role name is not fixed. Do not use `arkkan_admin` or `arkkan_user` for initialization.
-- Supply connection settings through standard PostgreSQL/libpq environment variables: `PGHOST`, `PGPORT` (default `5432`), `PGDATABASE`, and `PGUSER`; use `PGPASSFILE` if the credentials file is not at libpq's default location. `PGDATABASE` and `PGUSER` are required for initialization. Never pass passwords as script options.
-- PostgreSQL's password-file mechanism (`~/.pgpass` on macOS and Linux) may supply credentials. Require file permissions `0600` for that file. The setup script must not create, print, or modify password files.
-- The project supplies a pinned Python dependency manifest and an example configuration without secrets. A separate project virtual environment is used for the CLI/API and setup tooling.
+- Supply the PostgreSQL connection settings and privileged client credentials defined in Data Architecture. `PGDATABASE` and `PGUSER` are required; run using the project virtual environment. Never pass passwords as script options.
 
 ### Execution sequence
 
@@ -518,7 +618,7 @@ Provide one installable executable named `arkkan` for macOS and Linux. It calls 
 
 - Install the Python package in the project's virtual environment (for example, `python -m pip install -e .` from the project root). Its package entry point provides the `arkkan` command. The executable runs wherever that environment's `bin` directory is on `PATH`; do not hardcode `/usr/local/bin` or change system Python.
 - The same commands and option semantics apply on macOS and Linux. System-wide exposure through `PATH` is optional and not needed for Phase 1 acceptance.
-- Use libpq connection settings `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and optionally `PGPASSFILE`. The CLI requires `PGDATABASE` and `PGUSER`; default the host and port according to libpq. Authentication uses PostgreSQL, including `~/.pgpass` when configured. Do not store passwords in CLI configuration, print them, or accept a password command-line flag.
+- Supply the libpq connection settings and client credentials defined in Data Architecture. The CLI requires `PGDATABASE` and `PGUSER`. Do not accept a password command-line flag.
 - `PGUSER=arkkan_user` permits read functions; `PGUSER=arkkan_admin` permits read and admin functions. Authorization is enforced by PostgreSQL, not a local CLI role switch. Do not make setup/superuser operations available as CLI subcommands.
 
 ### Command reference
@@ -578,6 +678,12 @@ Use controlled SQL and qualified names in privileged functions; set a safe funct
 
 **Generate View** appears in the permissions matrix but has no defined function contract. Do not fabricate an API operation; it requires separate specification before implementation.
 
+### Credential and Environment Identity Protection
+
+The environment operator creates and manages both password files. The environment management utility validates their existence and permissions without exposing their contents; it must never create, modify, overwrite or synchronize credentials. Require file permissions `0600` for the client password file; protect the provisioning password file from unauthorized access. Exclude credential files from Git. Initialization must not create, print or modify password files. CLI tooling must not store passwords in CLI configuration or print them; do not embed passwords in SQL, source, repositories, container images or logs. The privileged operator sets or rotates PostgreSQL role passwords separately, as described under Initialization.
+
+Protect `arkkan_env.environment_identity` against subsequent modification, insertion, deletion or removal by ordinary roles. Application roles must not be able to alter or remove the environment metadata. The deployment superuser retains its administrative powers; control privileged access. Automated tests must not bypass the staging identity guard.
+
 ## `arkkan` Log Schema (Phase 3)
 
 Two audit log classes are planned:
@@ -593,11 +699,11 @@ Caller identity, trusted IP attribution across container networking, and the con
 
 | Phase | Scope | Completion criteria |
 |---|---|---|
-| **1. Working Local Prototype** | PostgreSQL schema, roles, SQL functions, Python API, CLI, and automated tests on macOS, before containerization. | All approved in-scope functions work through PostgreSQL and Python; CLI operations and local integration tests pass. |
+| **1. Working Local Prototype** | PostgreSQL schema, roles, SQL functions, Python API, CLI, and automated tests on macOS, with isolated PostgreSQL infrastructure before containerization of `arkkan`. | All approved in-scope functions work through PostgreSQL and Python; CLI operations and local integration tests pass. |
 | **2. Containerization** | Docker deployment, automated container builds and initialization, persistent storage, and container integration tests. | Phase 1 functionality works in containers without changing its business rules. |
 | **3. Audit Logging** | Read and change log schemas, caller identity, attribution, and logging enforcement. | Audit logging requirements are defined and validated with automated tests. |
 | **4. Production Readiness** | Ready-to-use PostgreSQL backup/restore, disaster-recovery, redundancy, and failover configurations, with recovery testing. | Recovery and failover configurations are documented and tested against defined recovery objectives. |
-| **5. Backlog Enhancements** | Deferred capabilities, including recipe-based prompt assembly. | Each enhancement is specified and prioritized before implementation. |
+| **5. Backlog Enhancements** | Deferred capabilities, including recipe-based prompt assembly and environment management enhancements not assigned to an earlier phase. | Each enhancement is specified and prioritized before implementation. |
 
 Phase 1 is a working prototype, not a disposable implementation. Production readiness is deferred. Prompt assembly remains the responsibility of consuming software; recipes are not part of the current implementation scope.
 
@@ -608,7 +714,7 @@ Implement Phase 1 in the following stages. Supply the coding LLM with the comple
 | Stage | Deliverable | Validation gate |
 |---|---|---|
 | **1. Project Foundation** | Python project structure, pinned dependencies, virtual environment guidance, configuration, and test harness. | Package installs in a clean environment; configuration validation and initial tests run. |
-| **2. Database Foundation** | Database roles, schemas, tables, constraints, triggers, seed data, and the initial `scripts/init_db.py` setup framework. | Schema and seed tests pass in an isolated PostgreSQL database; `--check` is read-only and applicable setup steps are idempotent. Full initialization is not yet complete. |
+| **2. Database Foundation** | Isolated development and staging PostgreSQL environments, shared Compose configuration, `scripts/manage_environment.py`, environment identity and test safety guard; database roles, schemas, tables, constraints, triggers, seed data, and the initial `scripts/init_db.py` setup framework. | Environment provisioning, container recreation with persistent data, identity protection, driver compatibility, and safety tests pass; schema and seed tests pass in the isolated staging PostgreSQL database; `--check` is read-only and applicable setup steps are idempotent. Full initialization is not yet complete. |
 | **3. PostgreSQL API** | All specified SQL functions, grants, and remaining initialization migrations. | Function integration and role-permission tests pass; full clean initialization, rerun, and failure/rollback tests pass. |
 | **4. Python API** | Python wrappers for the PostgreSQL functions and the common JSON response contract. | Unit and PostgreSQL integration tests pass for all specified operations and errors. |
 | **5. CLI** | The `arkkan` command and subcommands, options, help, authentication, and output handling defined in the CLI section. | CLI argument, output, authorization, and end-to-end command tests pass. |
@@ -624,12 +730,10 @@ Implement Phase 1 in the following stages. Supply the coding LLM with the comple
 
 ### Cross-Phase Requirements
 
-- Develop and initially test on macOS. Linux Docker deployment begins in Phase 2.
-- Keep database connections configurable outside source code; do not hardcode local paths or store credentials in source, repositories, images, or logs.
+- Develop and initially test `arkkan` on macOS using the isolated PostgreSQL infrastructure defined in Environment Architecture. Linux Docker deployment of `arkkan` begins in Phase 2.
 - Use the **Initialization (Phase 1)** procedure for database setup in each deployment environment.
-- Pin applicable dependencies to identifiable versions. Separate privileged setup credentials from ordinary API credentials.
-- In Phase 2, automate container builds, initialization, startup, and integration tests; preserve PostgreSQL data across container restarts or rebuilds.
-- Include a basic, documented manual database backup-and-restore procedure during local development. Automated recovery, replication, and failover belong to Phase 4.
+- Pin applicable dependencies to identifiable versions.
+- In Phase 2, automate container builds, initialization, startup, and integration tests using the persistence and configuration contracts in Data Architecture.
 
 ### Testing and Acceptance
 
@@ -646,6 +750,8 @@ Implement Phase 1 in the following stages. Supply the coding LLM with the comple
 9. Role-level function permissions, denial of direct writes, protected internal functions, and Python error translation.
 10. Python wrappers, input validation, null versus omitted metadata changes, and rejection of malformed calls.
 11. CLI behavior and its interaction with the Python API under **CLI (Phase 1)**, including all documented commands, help, authorization, and output modes.
+
+**Stage 2 environment tests and validation** must cover configuration validation and rejection of conflicts, independent Compose projects and storage, credential file validation without disclosure, driver installation/import and PostgreSQL connectivity with password-file authentication, successful provisioning and safe reruns, read-only `check`, readiness failures, preservation of existing data and unrelated infrastructure, singleton identity creation and protection, rejection of identity mismatches, and mandatory test safety rejection for development, production, missing, invalid, or unreadable identity and incorrect target connection settings. Verify that application resets preserve identity and that tests do not depend on retained test data. Verify that removing and recreating the designated staging PostgreSQL container with its configured external storage preserves database contents, roles, environment identity and configuration; verify connectivity after recreation. Perform this controlled test only after the staging safety guard succeeds; do not delete persistent storage or affect unrelated infrastructure.
 
 **Phase 2 tests** must rerun applicable Phase 1 tests inside Docker and verify deployment initialization, restart behavior, and persistent storage.
 

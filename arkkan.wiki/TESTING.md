@@ -30,14 +30,16 @@ Maintain traceability between the specification and automated tests so that cove
 - After each audit correction, rerun affected tests.
 - Before stage completion, execute all applicable tests from the current and previous stages to detect regressions.
 - Develop and initially test on macOS during Phase 1; run all Phase 1 acceptance tests on macOS at Stage 6. In Phase 2, rerun applicable Phase 1 tests inside Docker and verify deployment initialization, restart behavior, and persistent storage.
+- Validate database-related stages in the staging checkout at a specific committed Git revision, independently of ongoing development. Do not modify source code in staging; correct defects in development and deploy the revised commit for validation.
 
 Actual test execution is mandatory. Code inspection does not establish a test pass. Any required test that fails, is skipped, is blocked, or is otherwise not executed prevents stage completion.
 
 ## 5. Test Isolation and Safety
 
-- Use a dedicated PostgreSQL test database separate from development and production databases.
-- Before database setup, test execution, or cleanup can modify data or database objects, use explicit safety guards to verify the target is the dedicated test database. Abort if its identity cannot be established. Do not assume that a local database is disposable.
-- Create and clean up test data automatically.
+- Use the dedicated staging PostgreSQL instance and `arkkan_test` database defined in the Environment Architecture section of `TECHNICAL_REQ.md`, isolated from development and production at the PostgreSQL instance level, including cluster-wide roles.
+- Use a shared mandatory safety guard before any automated database test, test setup, or cleanup. Verify the designated staging host, port, database and independently stored `arkkan_env.environment_identity` record; proceed only if the identity is exactly `staging`. Abort the database test, setup, or cleanup before proceeding if any verification fails, including missing, invalid or unreadable identity. No force option or bypass is permitted. Do not assume that a local database is disposable.
+- Preserve the environment identity throughout test resets and cleanup. Keep staging infrastructure stable and automatically establish and reset application schema and test data to known states as required by each suite, including clean application initialization tests. Do not rely on manually maintained test data or previous test executions.
+- Restrict infrastructure tests to the designated staging PostgreSQL instance. Before removing or recreating its container, verify the staging target using the mandatory safety guard. Container recreation tests must preserve the configured external persistent storage and verify the persistence and connectivity requirements defined in `TECHNICAL_REQ.md`, under Testing and Acceptance. Never delete persistent storage during tests or cleanup.
 - Use temporary directories for filesystem tests.
 - Keep test credentials outside source code and protect credentials and sensitive content in logs and reports.
 - Ensure tests are reproducible and do not rely on undocumented environment state.
