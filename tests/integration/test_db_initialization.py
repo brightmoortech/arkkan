@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from arkkan._db_migrations import _migration_list
+from arkkan._db_migrations import _API_WRITES, _migration_list
 from arkkan._migration_workflow import _Migration, _run_migrations
 from arkkan._test_safety import _staging_connection
 
@@ -28,6 +28,11 @@ def _reset_application() -> None:
 
     with _staging_connection(_ROOT) as connection:
         with connection.transaction():
+            for name, arguments, _ in reversed(_API_WRITES):
+                signature = ", ".join(kind for _, kind in arguments)
+                connection.execute(
+                    f"DROP FUNCTION IF EXISTS arkkan_api.{name}({signature}) RESTRICT"
+                )
             for table in _TABLES:
                 connection.execute(sql.SQL("DROP TABLE IF EXISTS {}.{} RESTRICT").format(
                     sql.Identifier("arkkan"), sql.Identifier(table)))
@@ -107,13 +112,13 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
     for args in ((), ("--check",)):
         result = _cli(*args)
         assert result.returncode == 0, result.stderr
-        assert result.stdout.count("[PENDING]") == 16
+        assert result.stdout.count("[PENDING]") == 21
         assert "[APPLIED]" not in result.stdout
         with _staging_connection(_ROOT) as connection:
             assert _state(connection) == before
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[APPLIED]") == 16
+    assert result.stdout.count("[APPLIED]") == 21
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[2] == before[2] == [(True, "staging")]
@@ -128,14 +133,14 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
             SELECT COUNT(*) FROM pg_catalog.pg_proc AS p
             JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
             WHERE n.nspname = 'arkkan_api'
-        """).fetchone() == (0,)
+        """).fetchone() == (5,)
         seeds = json.loads((_ROOT / "sql/migrations/012_resource_types.json").read_text())
         assert connection.execute("""
             SELECT slug, description, is_system FROM arkkan.resource_types ORDER BY slug
         """).fetchall() == [(slug, seeds[slug], True) for slug in sorted(seeds)]
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[UNCHANGED]") == 16
+    assert result.stdout.count("[UNCHANGED]") == 21
     assert "[APPLIED]" not in result.stdout
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
@@ -458,7 +463,7 @@ def test_s3_005_helper_conflict(_initialized: None, statement: str, cleanup: str
         connection.execute(statement)
     try:
         for apply in (False, True):
-            with pytest.raises(ValueError, match="Conflicting internal API helper"):
+            with pytest.raises(ValueError, match="Conflicting API function"):
                 _run(apply=apply)
     finally:
         if cleanup is not None:
@@ -484,6 +489,7 @@ def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> N
     assert [line for line in plan if line.startswith("[PENDING]")] == [
         "[PENDING] 013_api_response", "[PENDING] 014_api_identifier_valid",
         "[PENDING] 015_api_state_valid", "[PENDING] 016_api_mode_valid",
+        *[f"[PENDING] {step.name}" for step in _migration_list(_ROOT)[16:]],
     ]
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == before
@@ -495,8 +501,420 @@ def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> N
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[:4] == before[:4]
-        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 4
+        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 9
         assert [connection.execute(query).fetchall() for query in queries] == data_before
     assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
+
+
+def _call(connection: "Connection[Any]", name: str, *arguments: Any) -> dict[str, Any]:
+    """Call only fixed WP2 function names and check their response envelope."""
+    from psycopg import sql
+
+    assert name in {item[0] for item in _API_WRITES}
+    response = connection.execute(
+        sql.SQL("SELECT arkkan_api.{}({})").format(
+            sql.Identifier(name), sql.SQL(", ").join(sql.Placeholder() for _ in arguments),
+        ), arguments,
+    ).fetchone()[0]
+    assert response["operation_name"] == name and response["message_type"] == "response"
+    assert response["result"] in ("success", "error")
+    if response["result"] == "success":
+        assert set(response) == {"operation_name", "message_type", "result", "data"}
+        assert isinstance(response["data"], dict)
+    else:
+        assert set(response) == {"operation_name", "message_type", "result", "reason"}
+        assert isinstance(response["reason"], str) and response["reason"].strip()
+    return response
+
+
+def _snapshot(connection: "Connection[Any]") -> list[list[Any]]:
+    return [connection.execute(query).fetchall() for query in (
+        "SELECT type_id, slug, description, is_system FROM arkkan.resource_types ORDER BY slug",
+        "SELECT resource_id, slug, name, description, type_id FROM arkkan.resource_definitions ORDER BY slug",
+        "SELECT version_id, resource_id, version, state, content, version_info, created_at "
+        "FROM arkkan.resource_versions ORDER BY version_id",
+    )]
+
+
+def test_s3_009_type_write_contracts(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        result = _call(connection, "add_resource_type", " Custom ")
+        assert result["result"] == "success"
+        assert set(result["data"]) == {"type_id", "slug"}
+        assert result["data"]["slug"] == " Custom "
+        from uuid import UUID
+        UUID(result["data"]["type_id"])
+        assert connection.execute(
+            "SELECT description, is_system FROM arkkan.resource_types WHERE slug = ' Custom '"
+        ).fetchone() == (None, False)
+        assert _call(connection, "add_resource_type", "custom", "description")["result"] == "success"
+        for slug in ("custom", "role"):
+            for description in ("edited", "", None):
+                result = _call(connection, "update_resource_type", slug, description)
+                assert result["data"] == {"slug": slug, "description": description}
+                assert connection.execute(
+                    "SELECT description FROM arkkan.resource_types WHERE slug = %s", (slug,)
+                ).fetchone() == (description,)
+        assert _call(connection, "delete_resource_type", "custom")["data"] == {"slug": "custom"}
+        assert connection.execute(
+            "SELECT count(*) FROM arkkan.resource_types WHERE slug = 'custom'"
+        ).fetchone() == (0,)
+
+
+def test_s3_010_invalid_type_writes_preserve_data(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        before = _snapshot(connection)
+        for name, args in (
+            ("add_resource_type", ("role",)),
+            ("update_resource_type", ("missing", "new")),
+            ("delete_resource_type", ("missing",)),
+            *[("delete_resource_type", (slug,)) for slug in (
+                "constraints", "process", "rubric", "role", "task", "templates", "extensions",
+            )],
+            *[(name, (slug, None) if name == "update_resource_type" else (slug,))
+              for name in ("add_resource_type", "update_resource_type", "delete_resource_type")
+              for slug in (None, "", " \t\n")],
+        ):
+            assert _call(connection, name, *args)["result"] == "error"
+            assert _snapshot(connection) == before
+
+
+def test_s3_011_referenced_type_deletion_denied(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        for empty in (False, True):
+            if empty:
+                connection.execute("DELETE FROM arkkan.resource_versions")
+            before = _snapshot(connection)
+            assert _call(connection, "delete_resource_type", "custom")["result"] == "error"
+            assert _snapshot(connection) == before
+
+
+def test_s3_012_add_resource_contract(_initialized: None) -> None:
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    with _staging_connection(_ROOT) as connection:
+        connection.execute("SET TIME ZONE 'Pacific/Auckland'")
+        result = _call(connection, "add_resource", " Resource ", "version-z", "role", "Name", "Description")
+        assert result["result"] == "success"
+        data = result["data"]
+        assert set(data) == {"resource_id", "version_id", "slug", "version", "state", "created_at"}
+        UUID(data["resource_id"])
+        UUID(data["version_id"])
+        assert (data["slug"], data["version"], data["state"]) == (" Resource ", "version-z", "disabled")
+        assert data["created_at"].endswith("Z")
+        row = connection.execute(
+            "SELECT content, version_info, created_at FROM arkkan.resource_versions WHERE version_id = %s",
+            (data["version_id"],),
+        ).fetchone()
+        assert row[:2] == ("", None)
+        assert datetime.fromisoformat(data["created_at"]) == row[2].astimezone(timezone.utc)
+        for version, state in (("2", "enabled"), ("1", "enabled_default"), ("0", "enabled_default")):
+            result = _call(connection, "add_resource", " Resource ", version, "role",
+                           "Ignored", "Ignored", "body\n", "info", state)
+            assert result["result"] == "success"
+            assert result["data"]["resource_id"] == data["resource_id"]
+        assert _call(connection, "add_resource", " Resource ", "no-type")["result"] == "success"
+        assert connection.execute(
+            "SELECT name, description FROM arkkan.resource_definitions WHERE slug = ' Resource '"
+        ).fetchone() == ("Name", "Description")
+        assert connection.execute(
+            "SELECT version, state FROM arkkan.resource_versions WHERE state IN ('enabled', 'enabled_default') "
+            "ORDER BY version"
+        ).fetchall() == [("0", "enabled_default"), ("1", "enabled"), ("2", "enabled")]
+        assert connection.execute(
+            "SELECT content, version_info FROM arkkan.resource_versions WHERE version = '0'"
+        ).fetchone() == ("body\n", "info")
+
+
+def test_s3_013_invalid_add_resource_preserves_data(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        assert _call(connection, "add_resource", "existing", "v", "role")["result"] == "success"
+        before = _snapshot(connection)
+        cases = [
+            ("new", "v"), ("new", "v", "missing"), ("existing", "other", "task"),
+            ("existing", "v", None, None, None, "private-content", None, "enabled_default"),
+            ("new", "v", "role", None, None, None),
+        ]
+        for slug in (None, "", " \t\n"):
+            cases.extend([(slug, "v", "role"), ("new", slug, "role"), ("new", "v", slug)])
+        for state in (None, "", "obsolete", "Enabled", " enabled", "unknown"):
+            cases.append(("new", "v", "role", None, None, "private-content", None, state))
+        for args in cases:
+            result = _call(connection, "add_resource", *args)
+            assert result["result"] == "error"
+            assert "private-content" not in result["reason"]
+            assert _snapshot(connection) == before
+
+
+def test_s3_014_add_resource_rolls_back_after_write(_initialized: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        assert _call(connection, "add_resource", "resource", "default", "role",
+                     None, None, "", None, "enabled_default")["result"] == "success"
+        with connection.transaction(force_rollback=True):
+            # Inject a specific expected database failure after the function has
+            # demoted the old default or created a new definition.
+            connection.execute("""
+                CREATE FUNCTION pg_temp.reject_test_insert() RETURNS trigger
+                LANGUAGE plpgsql AS $$ BEGIN
+                    RAISE EXCEPTION 'synthetic sensitive diagnostic' USING ERRCODE = '23505';
+                END $$
+            """)
+            connection.execute("""
+                CREATE TRIGGER test_reject_insert BEFORE INSERT ON arkkan.resource_versions
+                FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_test_insert()
+            """)
+            before = _snapshot(connection)
+            for slug in ("resource", "new-resource"):
+                result = _call(connection, "add_resource", slug, "new", "role",
+                               None, None, "private-content", None, "enabled_default")
+                assert result["result"] == "error"
+                assert "sensitive" not in result["reason"] and "private-content" not in result["reason"]
+                assert _snapshot(connection) == before
+
+
+def test_s3_015_update_resource_contract(_initialized: None) -> None:
+    from psycopg.types.json import Jsonb
+
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        before = connection.execute(
+            "SELECT version_id, resource_id, version, state, content, created_at FROM arkkan.resource_versions"
+        ).fetchall()
+        expected_metadata = {"name": None, "description": None, "version_info": None}
+        for changes in ({"name": "New name"}, {"description": ""},
+                        {"name": None, "description": None, "version_info": "Changes"},
+                        {"version_info": ""}, {"version_info": None}):
+            args = ("resource", Jsonb(changes))
+            if "version_info" in changes:
+                args += ("opaque-version",)
+            result = _call(connection, "update_resource", *args)
+            assert result["result"] == "success"
+            expected = {"slug": "resource", "updated_fields": sorted(changes)}
+            if "version_info" in changes:
+                expected["version"] = "opaque-version"
+            assert result["data"] == expected
+            metadata = connection.execute(
+                "SELECT d.name, d.description, v.version_info FROM arkkan.resource_definitions AS d "
+                "JOIN arkkan.resource_versions AS v USING (resource_id) WHERE d.slug = 'resource'"
+            ).fetchone()
+            expected_metadata.update(changes)
+            assert dict(zip(("name", "description", "version_info"), metadata)) == expected_metadata
+            assert connection.execute(
+                "SELECT version_id, resource_id, version, state, content, created_at FROM arkkan.resource_versions"
+            ).fetchall() == before
+        for state in ("enabled", "disabled", "obsolete"):
+            connection.execute("UPDATE arkkan.resource_versions SET state = %s", (state,))
+            result = _call(connection, "update_resource", "resource", Jsonb({"version_info": state}), "opaque-version")
+            assert result["result"] == "success"
+            assert connection.execute("SELECT state, version_info FROM arkkan.resource_versions").fetchone() == (state, state)
+        connection.execute("DELETE FROM arkkan.resource_versions")
+        assert _call(connection, "update_resource", "resource", Jsonb({"name": "Empty resource"}))["result"] == "success"
+
+
+def test_s3_016_invalid_updates_are_atomic(_initialized: None) -> None:
+    from psycopg.types.json import Jsonb
+
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        before = _snapshot(connection)
+        cases = [("resource", None), ("missing", Jsonb({"name": "x"})),
+                 ("resource", Jsonb({"name": "x"}), "opaque-version"),
+                 ("resource", Jsonb({"name": "x", "version_info": "x"}), "missing")]
+        cases += [("resource", Jsonb(value)) for value in (None, {}, [], "text", 1, True)]
+        cases += [(slug, Jsonb({"name": "x"})) for slug in (None, "", " \t")]
+        cases += [("resource", Jsonb({"version_info": "x"}), version) for version in (None, "", " \n")]
+        for key in ("slug", "type_slug", "version", "content", "state", "resource_id", "created_at", "unknown"):
+            cases.append(("resource", Jsonb({"name": "x", key: "private-content"})))
+        for key in ("name", "description", "version_info"):
+            for value in (1, True, [], {}):
+                cases.append(("resource", Jsonb({key: value}), "opaque-version" if key == "version_info" else None))
+        for args in cases:
+            result = _call(connection, "update_resource", *args)
+            assert result["result"] == "error" and "private-content" not in result["reason"]
+            assert _snapshot(connection) == before
+
+
+@pytest.mark.parametrize("role", ["arkkan_admin", "arkkan_user"])
+def test_s3_017_write_functions_restricted(_initialized: None, role: str) -> None:
+    from psycopg import sql
+    from psycopg.errors import InsufficientPrivilege
+
+    with _staging_connection(_ROOT) as connection:
+        for name, arguments, _ in _API_WRITES:
+            signature = f"arkkan_api.{name}({', '.join(kind for _, kind in arguments)})"
+            assert connection.execute(
+                "SELECT pg_catalog.has_function_privilege(%s, %s, 'EXECUTE')", (role, signature)
+            ).fetchone() == (False,)
+            with pytest.raises(InsufficientPrivilege):
+                with connection.transaction(force_rollback=True):
+                    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA arkkan_api TO {}").format(sql.Identifier(role)))
+                    connection.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+                    connection.execute(f"SELECT arkkan_api.{name}({', '.join('NULL::' + kind for _, kind in arguments)})")
+        # Verify SECURITY DEFINER execution without table/helper access. These
+        # temporary admin grants roll back; permanent exposure belongs to WP5.
+        if role == "arkkan_admin":
+            with connection.transaction(force_rollback=True):
+                connection.execute("GRANT USAGE ON SCHEMA arkkan_api TO arkkan_admin")
+                for name, arguments, _ in _API_WRITES:
+                    signature = f"arkkan_api.{name}({', '.join(kind for _, kind in arguments)})"
+                    connection.execute(f"GRANT EXECUTE ON FUNCTION {signature} TO arkkan_admin")
+                connection.execute("SET LOCAL ROLE arkkan_admin")
+                from psycopg.types.json import Jsonb
+                for name, args in (
+                    ("add_resource_type", ("admin-type",)),
+                    ("update_resource_type", ("admin-type", "description")),
+                    ("delete_resource_type", ("admin-type",)),
+                    ("add_resource", ("admin-resource", "v", "role")),
+                    ("update_resource", ("admin-resource", Jsonb({"name": "Name"}))),
+                ):
+                    assert _call(connection, name, *args)["result"] == "success"
+
+
+@pytest.mark.parametrize("statement,cleanup", [
+    ("ALTER FUNCTION arkkan_api.add_resource_type(text,text) SECURITY INVOKER", None),
+    ("ALTER FUNCTION arkkan_api.add_resource_type(text,text) SET search_path = public", None),
+    ("GRANT EXECUTE ON FUNCTION arkkan_api.add_resource_type(text,text) TO PUBLIC", None),
+    ("CREATE FUNCTION arkkan_api.add_resource_type(text,integer) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'",
+     "DROP FUNCTION arkkan_api.add_resource_type(text,integer)"),
+])
+def test_s3_018_write_function_conflict(_initialized: None, statement: str, cleanup: str | None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        connection.execute(statement)
+        before = _state(connection)
+    try:
+        for apply in (False, True):
+            with pytest.raises(ValueError, match="Conflicting API function"):
+                _run(apply=apply)
+        with _staging_connection(_ROOT) as connection:
+            assert _state(connection) == before
+    finally:
+        if cleanup:
+            with _staging_connection(_ROOT) as connection:
+                connection.execute(cleanup)
+
+
+def test_s3_019_upgrade_preserves_wp1(_clean_application: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _run_migrations(connection, _migration_list(_ROOT)[:16], apply=True,
+                        lock_key=_LOCK, report=lambda message: None)
+        _records(connection)
+        before_state, before_data = _state(connection), _snapshot(connection)
+    plan = _run(apply=False)
+    assert [line for line in plan if line.startswith("[PENDING]")] == [
+        f"[PENDING] {step.name}" for step in _migration_list(_ROOT)[16:]
+    ]
+    with _staging_connection(_ROOT) as connection:
+        assert _state(connection) == before_state and _snapshot(connection) == before_data
+    _run(apply=True)
+    with _staging_connection(_ROOT) as connection:
+        after = _state(connection)
+        assert after[:4] == before_state[:4]
+        assert set(before_state[4]).issubset(after[4]) and len(after[4]) == len(before_state[4]) + 5
+        assert _snapshot(connection) == before_data
+    assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
+    with _staging_connection(_ROOT) as connection:
+        assert _state(connection) == after and _snapshot(connection) == before_data
+
+
+@pytest.mark.parametrize("scenario", ["new-defaults", "existing-defaults", "duplicate", "type-delete", "different-types", "metadata"])
+def test_s3_020_concurrent_writes(_initialized: None, scenario: str) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from psycopg.types.json import Jsonb
+
+    with _staging_connection(_ROOT) as connection:
+        assert _call(connection, "add_resource_type", "custom")["result"] == "success"
+        if scenario in ("existing-defaults", "metadata"):
+            assert _call(connection, "add_resource", "resource", "old", "custom",
+                         None, None, "", None, "enabled_default")["result"] == "success"
+    barrier = Barrier(2, timeout=10)
+
+    def worker(index: int) -> dict[str, Any]:
+        with _staging_connection(_ROOT) as connection:
+            connection.execute("SET statement_timeout = '10s'")
+            with connection.transaction():
+                barrier.wait()
+                if scenario == "type-delete" and index == 1:
+                    return _call(connection, "delete_resource_type", "custom")
+                if scenario == "metadata":
+                    changes = {"name": "Name"} if index == 0 else {"description": "Description"}
+                    return _call(connection, "update_resource", "resource", Jsonb(changes))
+                version = "same" if scenario == "duplicate" else str(index)
+                type_slug = "role" if scenario == "different-types" and index == 1 else "custom"
+                return _call(connection, "add_resource", "resource", version, type_slug,
+                             None, None, "", None, "enabled_default")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(worker, index) for index in range(2)]
+        responses = [future.result(timeout=20) for future in futures]
+    results = sorted(response["result"] for response in responses)
+    if scenario in ("duplicate", "type-delete", "different-types"):
+        assert results == ["error", "success"]
+    else:
+        assert results == ["success", "success"]
+    with _staging_connection(_ROOT) as connection:
+        versions = connection.execute("SELECT version, state FROM arkkan.resource_versions").fetchall()
+        if scenario == "type-delete" and responses[1]["result"] == "success":
+            assert versions == []
+            assert connection.execute("SELECT count(*) FROM arkkan.resource_definitions").fetchone() == (0,)
+        else:
+            assert sum(state == "enabled_default" for _, state in versions) == 1
+            assert len(versions) == {"new-defaults": 2, "existing-defaults": 3,
+                                     "duplicate": 1, "type-delete": 1, "different-types": 1, "metadata": 1}[scenario]
+        if scenario == "metadata":
+            assert connection.execute(
+                "SELECT name, description FROM arkkan.resource_definitions WHERE slug = 'resource'"
+            ).fetchone() == ("Name", "Description")
+        if scenario == "different-types":
+            winner = next(index for index, result in enumerate(responses) if result["result"] == "success")
+            assert connection.execute(
+                "SELECT t.slug FROM arkkan.resource_definitions AS d "
+                "JOIN arkkan.resource_types AS t USING (type_id) WHERE d.slug = 'resource'"
+            ).fetchone() == (("custom", "role")[winner],)
+
+
+@pytest.mark.parametrize("operation", ["add_resource", "update_resource"])
+def test_s3_021_resource_writes_wait_for_lock(_initialized: None, operation: str) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from queue import Queue
+    from time import monotonic, sleep
+    from psycopg.types.json import Jsonb
+
+    backend: Queue[int] = Queue()
+
+    def worker() -> dict[str, Any]:
+        with _staging_connection(_ROOT) as connection:
+            connection.execute("SET statement_timeout = '10s'")
+            backend.put(connection.info.backend_pid)
+            if operation == "add_resource":
+                return _call(connection, operation, "resource", "next", None,
+                             None, None, "", None, "enabled_default")
+            return _call(connection, operation, "resource", Jsonb({"name": "Updated"}))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with _staging_connection(_ROOT) as connection:
+            _records(connection)
+            with connection.transaction():
+                connection.execute(
+                    "SELECT resource_id FROM arkkan.resource_definitions "
+                    "WHERE slug = 'resource' FOR UPDATE"
+                )
+                future = pool.submit(worker)
+                pid = backend.get(timeout=10)
+                deadline = monotonic() + 5
+                while monotonic() < deadline:
+                    blockers = connection.execute(
+                        "SELECT pg_catalog.pg_blocking_pids(%s)", (pid,)
+                    ).fetchone()[0]
+                    if connection.info.backend_pid in blockers:
+                        break
+                    assert not future.done(), "Resource write bypassed the resource lock."
+                    sleep(0.01)
+                else:
+                    pytest.fail("Resource write did not wait on the held resource lock.")
+                assert not future.done()
+            assert future.result(timeout=15)["result"] == "success"

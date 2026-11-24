@@ -82,14 +82,26 @@ _SEED_SLUGS = frozenset((
 ))
 
 
-# Internal API helpers only; public API functions are introduced in later work packages.
-# Each helper is checked independently, including its argument names and types.
+# Each function is checked independently, including its argument names and types.
 _API_HELPERS = (
     ("api_response", "plpgsql", (("operation_name", "text"), ("result", "text"),
                                  ("data", "jsonb"), ("reason", "text")), "jsonb"),
     ("api_identifier_valid", "sql", (("value", "text"),), "boolean"),
     ("api_state_valid", "sql", (("value", "text"),), "boolean"),
     ("api_mode_valid", "sql", (("value", "text"),), "boolean"),
+)
+
+
+# WP2 functions remain owner-only until the access-grant work package. Defaults
+# use PostgreSQL's catalog expression form, not the spelling in the SQL file.
+_API_WRITES = (
+    ("add_resource_type", (("slug", "text"), ("description", "text")), "NULL::text"),
+    ("update_resource_type", (("slug", "text"), ("description", "text")), None),
+    ("delete_resource_type", (("slug", "text"),), None),
+    ("add_resource", tuple((name, "text") for name in (
+        "slug", "version", "type_slug", "name", "description", "content", "version_info", "state",
+    )), "NULL::text, NULL::text, NULL::text, ''::text, NULL::text, 'disabled'::text"),
+    ("update_resource", (("slug", "text"), ("changes", "jsonb"), ("version", "text")), "NULL::text"),
 )
 
 
@@ -138,8 +150,8 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
         raise ValueError(f"Unexpected relation in schema {schema}.")
     allowed_helpers = {(f"reject_{table}_change", 0) for table in _TABLES}
     allowed_helpers.update((name, len(arguments)) for name, _, arguments, _ in _API_HELPERS)
-    if schema != "arkkan":
-        allowed_helpers = set()
+    if schema == "arkkan_api":
+        allowed_helpers = {(name, len(arguments)) for name, arguments, _ in _API_WRITES}
     functions = connection.execute("""
         SELECT p.proname, p.pronargs FROM pg_catalog.pg_proc AS p
         JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
@@ -352,9 +364,10 @@ def _apply_seeds(
             raise ValueError("A newly inserted system type has an unexpected description.")
 
 
-def _api_helper_ready(
+def _api_function_ready(
     connection: "Connection[Any]", *, name: str, language: str,
     arguments: tuple[tuple[str, str], ...], return_type: str, body: str,
+    schema: str = "arkkan", defaults: str | None = None,
 ) -> bool:
     rows = connection.execute("""
         SELECT p.prosrc, p.prokind, pg_catalog.pg_get_userbyid(p.proowner) = CURRENT_USER,
@@ -363,6 +376,7 @@ def _api_helper_ready(
                p.proretset, p.prosecdef, p.provolatile, p.proisstrict,
                p.proparallel, p.proconfig, p.pronargdefaults,
                p.proargmodes IS NULL, p.provariadic = 0, p.proleakproof,
+               pg_catalog.pg_get_expr(p.proargdefaults, 0),
                NOT EXISTS (
                    SELECT 1 FROM pg_catalog.aclexplode(COALESCE(
                        p.proacl, pg_catalog.acldefault('f', p.proowner))) AS acl
@@ -371,16 +385,18 @@ def _api_helper_ready(
         FROM pg_catalog.pg_proc AS p
         JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
         JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
-        WHERE n.nspname = 'arkkan' AND p.proname = %s
-    """, (name,)).fetchall()
+        WHERE n.nspname = %s AND p.proname = %s
+    """, (schema, name)).fetchall()
     if not rows:
         return False
     expected = (body, "f", True, language, ", ".join(kind for _, kind in arguments),
                 [argument for argument, _ in arguments], return_type,
-                False, False, "i", False, "u", ["search_path=pg_catalog"],
-                0, True, True, False, True)
+                False, schema == "arkkan_api", "v" if schema == "arkkan_api" else "i",
+                False, "u", ["search_path=pg_catalog"],
+                0 if defaults is None else len(defaults.split(", ")),
+                True, True, False, defaults, True)
     if rows != [expected]:
-        raise ValueError(f"Conflicting internal API helper arkkan.{name}.")
+        raise ValueError(f"Conflicting API function {schema}.{name}.")
     return True
 
 
@@ -429,8 +445,20 @@ def _migration_list(root: Path) -> tuple[_Migration, ...]:
         if len(parts) != 3 or not parts[1].strip():
             raise ValueError(f"Invalid API helper migration: {filename}.")
         migrations.append(_Migration(
-            filename, partial(_api_helper_ready, name=name, language=language,
+            filename, partial(_api_function_ready, name=name, language=language,
                               arguments=arguments, return_type=return_type, body=parts[1]),
+            partial(_execute_sql, statement=statement),
+        ))
+    for number, (name, arguments, defaults) in enumerate(_API_WRITES, 17):
+        filename = f"{number:03}_{name}"
+        statement = (folder / f"{filename}.sql").read_text(encoding="utf-8")
+        parts = statement.split("$body$")
+        if len(parts) != 3 or not parts[1].strip():
+            raise ValueError(f"Invalid API function migration: {filename}.")
+        migrations.append(_Migration(
+            filename, partial(_api_function_ready, name=name, language="plpgsql",
+                              arguments=arguments, return_type="jsonb", body=parts[1],
+                              schema="arkkan_api", defaults=defaults),
             partial(_execute_sql, statement=statement),
         ))
     return tuple(migrations)

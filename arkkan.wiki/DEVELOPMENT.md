@@ -173,13 +173,18 @@ staging.
 
 ## Application Database Initialization
 
-Stage 2 was accepted on November 24, 2026. Stage 3 adds the private API
-response and input-validation helpers through migrations 013–016. These
-helpers are not public resource API functions; the public API and its execution
-grants remain to be implemented. The four new migrations require PostgreSQL
-validation in the designated staging environment. Use the provisioned
-development instance for manual initialization, and reserve the staging
-instance for automated validation.
+Stage 2 was accepted on November 24, 2026. Stage 3 WP1 adds the private API
+response and input-validation helpers through migrations 013–016. WP2 adds
+`add_resource_type`, `update_resource_type`, `delete_resource_type`,
+`add_resource`, and `update_resource` through migrations 017–021. These five
+functions use `arkkan_api` but remain owner-only at this checkpoint; runtime
+role grants are deferred to WP5. No Python resource API or CLI is available.
+
+The Stage 3 migrations still require PostgreSQL validation. Staging deployment
+and full integration validation are consolidated at the end of Stage 3.
+Use the provisioned development instance for manual initialization, and reserve
+the staging instance for automated validation.
+
 From the configured development checkout, with the environment verified by
 `manage_environment.py check`, run:
 
@@ -190,9 +195,10 @@ From the configured development checkout, with the environment verified by
 This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
 superuser privileges, local environment identity, and all ordered migration
 steps without writing to the database. Review the target and the `PENDING`
-and `UNCHANGED` results. On a compliant Stage 2 database, the first Stage 3
-foundation dry run should report migrations 001–012 unchanged and 013–016
-pending. Apply only after verifying the intended target and reviewing the plan:
+and `UNCHANGED` results. On a compliant WP1 database, the WP2 dry run should
+report migrations 001–016 unchanged and 017–021 pending. On a compliant Stage 2
+database, migrations 013–021 should be pending. Apply only after verifying the
+intended target and reviewing the plan:
 
 ```bash
 .venv/bin/python scripts/init_db.py --apply
@@ -330,7 +336,8 @@ checkout:
 .venv/bin/python scripts/init_db.py
 ```
 
-Expect a successful environment check and twelve `UNCHANGED` migration steps.
+Expect a successful environment check and all installed migration steps
+`UNCHANGED` (21 after WP2 has been applied).
 Record the backup and restore exit status and comparison outcome. Resume
 application writes only after verification. Keep the recovery database separate:
 never point `.env`, initialization, or automated tests at it. Its copied identity

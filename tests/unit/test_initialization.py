@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from arkkan._db_migrations import _migration_list
+from arkkan._db_migrations import _API_WRITES, _migration_list
 from arkkan._migration_workflow import _Migration, _run_migrations
 from arkkan._initialization_connection import _initialization_connection
 from scripts.init_db import _settings
@@ -223,8 +223,8 @@ def test_s2_058_reject_unsafe_configuration(
 
 def test_s2_059_migration_manifest_and_seed_mapping() -> None:
     migrations = _migration_list(_ROOT)
-    assert len(migrations) == 16
-    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 17)]
+    assert len(migrations) == 21
+    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 22)]
     folder = _ROOT / "sql" / "migrations"
     assert {f"{migration.name}.sql" for migration in migrations} == {
         path.name for path in folder.glob("*.sql")
@@ -290,13 +290,13 @@ def test_s2_068_connection_prerequisites(
 
 @pytest.mark.parametrize("mutation", [None, "missing", "body", "signature", "owner", "acl", "definer", "overload"])
 def test_s3_006_helper_catalog_check(mutation: str | None) -> None:
-    from arkkan._db_migrations import _api_helper_ready
+    from arkkan._db_migrations import _api_function_ready
 
     expected = ["body", "f", True, "sql", "text", ["value"], "boolean",
                 False, False, "i", False, "u", ["search_path=pg_catalog"],
-                0, True, True, False, True]
+                0, True, True, False, None, True]
     changed = {"body": (0, "different"), "signature": (4, "integer"),
-               "owner": (2, False), "acl": (17, False), "definer": (8, True)}
+               "owner": (2, False), "acl": (18, False), "definer": (8, True)}
     if mutation in changed:
         index, value = changed[mutation]
         expected[index] = value
@@ -305,7 +305,7 @@ def test_s3_006_helper_catalog_check(mutation: str | None) -> None:
         rows.append(tuple(expected))
 
     def execute(statement: str, params: tuple[str, ...]) -> Any:
-        assert params == ("api_identifier_valid",)
+        assert params == ("arkkan", "api_identifier_valid")
         assert "pg_catalog.pg_proc" in statement
         return SimpleNamespace(fetchall=lambda: rows)
 
@@ -313,7 +313,49 @@ def test_s3_006_helper_catalog_check(mutation: str | None) -> None:
     kwargs = dict(name="api_identifier_valid", language="sql", arguments=(("value", "text"),),
                   return_type="boolean", body="body")
     if mutation in (None, "missing"):
-        assert _api_helper_ready(connection, **kwargs) is (mutation is None)
+        assert _api_function_ready(connection, **kwargs) is (mutation is None)
     else:
-        with pytest.raises(ValueError, match="Conflicting internal API helper"):
-            _api_helper_ready(connection, **kwargs)
+        with pytest.raises(ValueError, match="Conflicting API function"):
+            _api_function_ready(connection, **kwargs)
+
+
+@pytest.mark.parametrize("name,arguments,defaults", _API_WRITES)
+@pytest.mark.parametrize("mutation", [None, "missing", "body", "owner", "language",
+                                     "arguments", "names", "return", "definer",
+                                     "volatility", "path", "defaults", "acl", "overload"])
+def test_s3_008_write_function_catalog_check(
+    name: str, arguments: tuple[tuple[str, str], ...], defaults: str | None,
+    mutation: str | None,
+) -> None:
+    from arkkan._db_migrations import _api_function_ready
+
+    row = ["body", "f", True, "plpgsql", ", ".join(kind for _, kind in arguments),
+           [argument for argument, _ in arguments], "jsonb", False, True, "v", False,
+           "u", ["search_path=pg_catalog"],
+           0 if defaults is None else len(defaults.split(", ")),
+           True, True, False, defaults, True]
+    mutations = {"body": (0, "other"), "owner": (2, False), "language": (3, "sql"),
+                 "arguments": (4, "integer"), "names": (5, ["wrong"]),
+                 "return": (6, "text"), "definer": (8, False), "volatility": (9, "i"),
+                 "path": (12, ["search_path=public"]), "defaults": (17, "'wrong'::text"),
+                 "acl": (18, False)}
+    if mutation in mutations:
+        index, value = mutations[mutation]
+        row[index] = value
+    rows = [] if mutation == "missing" else [tuple(row)]
+    if mutation == "overload":
+        rows *= 2
+
+    def execute(statement: str, params: tuple[str, ...]) -> Any:
+        assert params == ("arkkan_api", name)
+        assert "pg_catalog.pg_get_expr(p.proargdefaults, 0)" in statement
+        return SimpleNamespace(fetchall=lambda: rows)
+
+    connection = SimpleNamespace(execute=execute)
+    kwargs = dict(name=name, language="plpgsql", arguments=arguments,
+                  return_type="jsonb", body="body", schema="arkkan_api", defaults=defaults)
+    if mutation in (None, "missing"):
+        assert _api_function_ready(connection, **kwargs) is (mutation is None)
+    else:
+        with pytest.raises(ValueError, match="Conflicting API function"):
+            _api_function_ready(connection, **kwargs)

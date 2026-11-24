@@ -183,10 +183,11 @@ the automated suite. Container recreation does not establish recovery success.
 
 ### Work Package 1: API foundation
 
-The Stage 2 initialization regressions remain applicable. The migration
-manifest, clean initialization, dry run and rerun checks now include all
-16 steps of the Stage 3 foundation candidate. Historical Stage 2 execution
-reports retain the results for the original 12-step implementation.
+The Stage 2 initialization regressions remain applicable. WP1 introduced
+migrations 013–016. The migration manifest, clean initialization, dry run and
+rerun checks cover the current cumulative migration set, including subsequent
+work packages. Historical Stage 2 execution reports retain the results for
+the original 12-step implementation.
 
 The following new integration cases are in `tests/integration/test_db_initialization.py`.
 They require the same staging guard and restrictive cleanup as the Stage 2 cases.
@@ -200,9 +201,47 @@ The new unit case is in `tests/unit/test_initialization.py`.
 | S3-004 | Security / internal function execution restrictions | `test_s3_004_private_helpers_denied`: both application roles lack execute permission for each private helper, including when temporary schema usage is granted inside a rolled-back transaction. |
 | S3-005 | Initialization / Execution sequence; Security | `test_s3_005_helper_conflict`: reject a changed security mode, unexpected execute grant or conflicting overload in check and apply mode. |
 | S3-006 | Initialization / Execution sequence; Security | `test_s3_006_helper_catalog_check`: simulated catalog results distinguish absent, compliant and conflicting helpers, including body, signature, owner, security mode, ACL and overload mismatches. |
-| S3-007 | Initialization / Reruns and failures; Data Lifecycle | `test_s3_007_upgrade_preserves_stage2_database`: initialize the Stage 2 foundation, populate test records, dry-run and apply the four new migrations, verify existing object identifiers and data remain intact, and verify an idempotent rerun. |
+| S3-007 | Initialization / Reruns and failures; Data Lifecycle | `test_s3_007_upgrade_preserves_stage2_database`: initialize the Stage 2 foundation, populate test records, dry-run and apply the pending API migrations, verify existing object identifiers and data remain intact, and verify an idempotent rerun. |
 
 These tests do not establish the public operation contracts, lifecycle policy,
 concurrency behavior or public API authorization. Those tests will be added with
 the respective implementations. Public API tests must verify the exact operation
 name, response fields and operation-specific data or error behavior.
+
+
+### Work Package 2: Resource and type writes
+
+Migrations 017–021 add the five specified write operations. The cumulative
+initialization inventory is 21 migrations. WP2 keeps function and schema access
+restricted to the deployment owner; permanent runtime grants remain WP5 scope.
+Tests use temporary grants inside rolled-back transactions to verify definer
+execution without giving runtime roles table or internal-helper access.
+
+The unit case is in `tests/unit/test_initialization.py`; the integration cases
+are in `tests/integration/test_db_initialization.py`. All database cases retain
+the staging guard, isolated setup and restrictive cleanup. Integration tests
+are collected during WP2 development but execution and acceptance remain
+pending the consolidated Stage 3 staging validation. Collection is not a pass.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S3-008 | Initialization / Execution sequence; Security | `test_s3_008_write_function_catalog_check`: simulated catalogs distinguish absent, compliant and conflicting definitions for each write function, including signatures, argument names/defaults, body, owner, language, security mode, volatility, search path, return type, ACL and overloads. |
+| S3-009 | Admin API / resource-type operations | `test_s3_009_type_write_contracts`: create a custom type with generated UUID and false system flag, preserve literal slugs, update custom and protected descriptions including empty and null values, and delete an unused custom type; verify response payloads and persisted values. |
+| S3-010 | Shared validation; Resource Types; type deletion restrictions | `test_s3_010_invalid_type_writes_preserve_data`: reject blank/null slugs, duplicate creation, missing targets and deletion of each protected type without changing data. |
+| S3-011 | Admin API / delete_resource_type; referential integrity | `test_s3_011_referenced_type_deletion_denied`: reject deletion of a type referenced by a resource with versions or with no versions. |
+| S3-012 | Admin API / add_resource; Resource Metadata; Resource Versions | `test_s3_012_add_resource_contract`: verify generated IDs, exact slugs, opaque versions, UTC timestamp under a non-UTC session timezone, empty content/default state, optional fields, existing metadata preservation, omitted type for existing resources and atomic default replacement. |
+| S3-013 | Shared validation; add_resource; lifecycle rules | `test_s3_013_invalid_add_resource_preserves_data`: reject invalid identifiers, missing/unknown/mismatched types, duplicate versions, null content and disallowed initial states; preserve all data and exclude supplied content from errors. |
+| S3-014 | Common API Contracts / transactional mutations; add_resource | `test_s3_014_add_resource_rolls_back_after_write`: inject a unique-constraint failure after definition creation or default demotion; verify all preceding changes roll back and errors exclude raw diagnostics and content. |
+| S3-015 | Admin API / update_resource; immutability | `test_s3_015_update_resource_contract`: verify mixed and individual metadata updates, omitted-field preservation, empty strings versus null clearing, exact updated-field payloads, unchanged immutable fields, version-information updates across all lifecycle states and metadata updates on an empty resource. |
+| S3-016 | Shared validation; update_resource | `test_s3_016_invalid_updates_are_atomic`: reject null/non-object/empty changes, unknown or immutable keys, non-string/non-null values, invalid identifiers, invalid version combinations and missing targets; mixed invalid updates leave every row unchanged. |
+| S3-017 | Security; API boundaries; intermediate checkpoint safety | `test_s3_017_write_functions_restricted`: both runtime roles lack WP2 execution privileges, even with temporary schema usage; temporary admin grants permit all five operations through SECURITY DEFINER without direct table/helper grants. Permanent role authorization is validated in WP5. |
+| S3-018 | Initialization / conflicting-object failures; Security | `test_s3_018_write_function_conflict`: check and apply reject changed security mode/search path, PUBLIC execute grants and conflicting overloads without replacing existing objects. |
+| S3-019 | Initialization / idempotency; data preservation | `test_s3_019_upgrade_preserves_wp1`: initialize WP1, retain populated records and existing object identifiers through read-only planning and five-step upgrade, and verify an unchanged rerun. |
+| S3-020 | Common API Contracts / concurrency and atomicity | `test_s3_020_concurrent_writes`: concurrent new/existing default creation keeps exactly one default; duplicate versions and competing immutable types produce one success; type deletion and resource creation cannot create an orphan; disjoint metadata updates both survive. |
+| S3-021 | Common API Contracts / serialized resource writes | `test_s3_021_resource_writes_wait_for_lock`: hold a resource row lock and observe each add/update call blocked by that backend before releasing the lock and verifying success; avoids relying only on simultaneous thread scheduling. |
+
+The shared WP2 call helper checks exact operation names, response keys, result
+values and object payloads or nonblank error reasons for every completed call.
+Catalog unit checks do not establish PostgreSQL syntax, catalog representation,
+locking behavior or database acceptance. Required staging execution covers the
+entire applicable suite, including the earlier-stage regressions.
