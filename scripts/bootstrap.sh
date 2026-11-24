@@ -80,7 +80,7 @@ if [ "${VENV_VERSION}" != "${REQUIRED_VERSION}" ]; then
 fi
 
 "${VENV_PYTHON}" -m pip install -r requirements-bootstrap.txt
-"${VENV_PYTHON}" -m pip install -r requirements.txt
+"${VENV_PYTHON}" -m pip install -r requirements-runtime.txt -r requirements.txt
 "${VENV_PYTHON}" -m pip install --no-build-isolation --no-deps -e .
 "${VENV_PYTHON}" -m pip check
 

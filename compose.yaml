@@ -1,0 +1,31 @@
+name: ${COMPOSE_PROJECT_NAME:?Set COMPOSE_PROJECT_NAME}
+services:
+  postgres:
+    image: postgres:18.7-bookworm
+    container_name: ${POSTGRES_CONTAINER_NAME:?Set POSTGRES_CONTAINER_NAME}
+    environment:
+      POSTGRES_DB: ${PGDATABASE:?Set PGDATABASE}
+      POSTGRES_USER: ${PGUSER:?Set PGUSER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "127.0.0.1:${PGPORT:?Set PGPORT}:5432"
+    volumes:
+      - type: bind
+        source: ${POSTGRES_DATA_DIR:?Set POSTGRES_DATA_DIR}
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE}
+        target: /run/secrets/postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s

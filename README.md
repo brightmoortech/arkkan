@@ -11,7 +11,7 @@ assemble prompts.
 and technically validated. Resource storage, retrieval, administration, the
 public Python API, and the CLI are not yet available.
 
-For development setup and automated testing, see [DEVELOPMENT.md](DEVELOPMENT.md).
+For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
 ## Features
 
