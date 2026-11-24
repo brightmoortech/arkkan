@@ -173,10 +173,13 @@ staging.
 
 ## Application Database Initialization
 
-The Stage 2 initialization utility has passed development and staging
-validation. It does not provide the PostgreSQL resource API or grant its execution privileges; these
-are Stage 3 deliverables. Use the provisioned development instance for manual
-initialization, and reserve the staging instance for automated validation.
+Stage 2 was accepted on November 24, 2026. Stage 3 adds the private API
+response and input-validation helpers through migrations 013–016. These
+helpers are not public resource API functions; the public API and its execution
+grants remain to be implemented. The four new migrations require PostgreSQL
+validation in the designated staging environment. Use the provisioned
+development instance for manual initialization, and reserve the staging
+instance for automated validation.
 From the configured development checkout, with the environment verified by
 `manage_environment.py check`, run:
 
@@ -187,8 +190,9 @@ From the configured development checkout, with the environment verified by
 This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
 superuser privileges, local environment identity, and all ordered migration
 steps without writing to the database. Review the target and the `PENDING`
-and `UNCHANGED` results. Apply only after verifying the intended target and
-reviewing the plan:
+and `UNCHANGED` results. On a compliant Stage 2 database, the first Stage 3
+foundation dry run should report migrations 001–012 unchanged and 013–016
+pending. Apply only after verifying the intended target and reviewing the plan:
 
 ```bash
 .venv/bin/python scripts/init_db.py --apply

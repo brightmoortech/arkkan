@@ -1,4 +1,4 @@
-"""Stage 2 application database migrations and their catalog checks."""
+"""Application database migrations and their catalog checks."""
 
 import json
 from collections.abc import Callable
@@ -82,6 +82,17 @@ _SEED_SLUGS = frozenset((
 ))
 
 
+# Internal API helpers only; public API functions are introduced in later work packages.
+# Each helper is checked independently, including its argument names and types.
+_API_HELPERS = (
+    ("api_response", "plpgsql", (("operation_name", "text"), ("result", "text"),
+                                 ("data", "jsonb"), ("reason", "text")), "jsonb"),
+    ("api_identifier_valid", "sql", (("value", "text"),), "boolean"),
+    ("api_state_valid", "sql", (("value", "text"),), "boolean"),
+    ("api_mode_valid", "sql", (("value", "text"),), "boolean"),
+)
+
+
 def _role_ready(connection: "Connection[Any]", role: str) -> bool:
     row = connection.execute("""
         SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
@@ -125,7 +136,8 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
     """, (schema,)).fetchall()
     if any(allowed_relations.get(name) != kind for name, kind in relations):
         raise ValueError(f"Unexpected relation in schema {schema}.")
-    allowed_helpers = {f"reject_{table}_change" for table in _TABLES}
+    allowed_helpers = {(f"reject_{table}_change", 0) for table in _TABLES}
+    allowed_helpers.update((name, len(arguments)) for name, _, arguments, _ in _API_HELPERS)
     if schema != "arkkan":
         allowed_helpers = set()
     functions = connection.execute("""
@@ -133,7 +145,7 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
         JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
         WHERE n.nspname = %s
     """, (schema,)).fetchall()
-    if any(name not in allowed_helpers or count != 0 for name, count in functions):
+    if any((name, count) not in allowed_helpers for name, count in functions):
         raise ValueError(f"Unexpected function in schema {schema}.")
     return True
 
@@ -340,6 +352,38 @@ def _apply_seeds(
             raise ValueError("A newly inserted system type has an unexpected description.")
 
 
+def _api_helper_ready(
+    connection: "Connection[Any]", *, name: str, language: str,
+    arguments: tuple[tuple[str, str], ...], return_type: str, body: str,
+) -> bool:
+    rows = connection.execute("""
+        SELECT p.prosrc, p.prokind, pg_catalog.pg_get_userbyid(p.proowner) = CURRENT_USER,
+               l.lanname, pg_catalog.oidvectortypes(p.proargtypes), p.proargnames,
+               pg_catalog.format_type(p.prorettype, NULL),
+               p.proretset, p.prosecdef, p.provolatile, p.proisstrict,
+               p.proparallel, p.proconfig, p.pronargdefaults,
+               p.proargmodes IS NULL, p.provariadic = 0, p.proleakproof,
+               NOT EXISTS (
+                   SELECT 1 FROM pg_catalog.aclexplode(COALESCE(
+                       p.proacl, pg_catalog.acldefault('f', p.proowner))) AS acl
+                   WHERE acl.grantee <> p.proowner
+               )
+        FROM pg_catalog.pg_proc AS p
+        JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+        JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
+        WHERE n.nspname = 'arkkan' AND p.proname = %s
+    """, (name,)).fetchall()
+    if not rows:
+        return False
+    expected = (body, "f", True, language, ", ".join(kind for _, kind in arguments),
+                [argument for argument, _ in arguments], return_type,
+                False, False, "i", False, "u", ["search_path=pg_catalog"],
+                0, True, True, False, True)
+    if rows != [expected]:
+        raise ValueError(f"Conflicting internal API helper arkkan.{name}.")
+    return True
+
+
 def _migration_list(root: Path) -> tuple[_Migration, ...]:
     folder = root / "sql" / "migrations"
     migrations: list[_Migration] = []
@@ -378,4 +422,15 @@ def _migration_list(root: Path) -> tuple[_Migration, ...]:
         "012_seed_resource_types", partial(_seed_ready, seeds=seeds),
         partial(_apply_seeds, seeds=seeds, statement=seed_sql),
     ))
+    for number, (name, language, arguments, return_type) in enumerate(_API_HELPERS, 13):
+        filename = f"{number:03}_{name}"
+        statement = (folder / f"{filename}.sql").read_text(encoding="utf-8")
+        parts = statement.split("$body$")
+        if len(parts) != 3 or not parts[1].strip():
+            raise ValueError(f"Invalid API helper migration: {filename}.")
+        migrations.append(_Migration(
+            filename, partial(_api_helper_ready, name=name, language=language,
+                              arguments=arguments, return_type=return_type, body=parts[1]),
+            partial(_execute_sql, statement=statement),
+        ))
     return tuple(migrations)

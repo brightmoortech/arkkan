@@ -177,3 +177,32 @@ backup, a restore into a new recovery database, matching identity and data,
 and unchanged active development environment. This is an operator verification,
 not an additional pytest case. Record actual execution status separately from
 the automated suite. Container recreation does not establish recovery success.
+
+
+## Phase 1, Stage 3: PostgreSQL API
+
+### Work Package 1: API foundation
+
+The Stage 2 initialization regressions remain applicable. The migration
+manifest, clean initialization, dry run and rerun checks now include all
+16 steps of the Stage 3 foundation candidate. Historical Stage 2 execution
+reports retain the results for the original 12-step implementation.
+
+The following new integration cases are in `tests/integration/test_db_initialization.py`.
+They require the same staging guard and restrictive cleanup as the Stage 2 cases.
+The new unit case is in `tests/unit/test_initialization.py`.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S3-001 | API / Common API Contracts: Response JSON | `test_s3_001_response_contract`: success preserves object and array payloads, empty content and optional JSON null values; error includes only the prescribed fields. |
+| S3-002 | API / Common API Contracts; Coding Conventions / PostgreSQL Coding Conventions | `test_s3_002_invalid_response_arguments`: reject invalid internal response combinations with SQLSTATE 22023 and a fixed diagnostic that excludes supplied sensitive values. |
+| S3-003 | API / Common API Contracts: Shared validation; Read Operations | `test_s3_003_shared_validation`: recognize nonblank literal identifiers, the four lifecycle states and three retrieval modes; reject null and invalid values without normalization. |
+| S3-004 | Security / internal function execution restrictions | `test_s3_004_private_helpers_denied`: both application roles lack execute permission for each private helper, including when temporary schema usage is granted inside a rolled-back transaction. |
+| S3-005 | Initialization / Execution sequence; Security | `test_s3_005_helper_conflict`: reject a changed security mode, unexpected execute grant or conflicting overload in check and apply mode. |
+| S3-006 | Initialization / Execution sequence; Security | `test_s3_006_helper_catalog_check`: simulated catalog results distinguish absent, compliant and conflicting helpers, including body, signature, owner, security mode, ACL and overload mismatches. |
+| S3-007 | Initialization / Reruns and failures; Data Lifecycle | `test_s3_007_upgrade_preserves_stage2_database`: initialize the Stage 2 foundation, populate test records, dry-run and apply the four new migrations, verify existing object identifiers and data remain intact, and verify an idempotent rerun. |
+
+These tests do not establish the public operation contracts, lifecycle policy,
+concurrency behavior or public API authorization. Those tests will be added with
+the respective implementations. Public API tests must verify the exact operation
+name, response fields and operation-specific data or error behavior.

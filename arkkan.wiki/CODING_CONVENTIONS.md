@@ -46,6 +46,7 @@ Define the coding conventions for `arkkan`. Follow `FUNCTIONAL_REQ.md`, `TECHNIC
 - Use parameterized SQL queries in Python.
 - Give SQL functions clearly defined responsibilities. Enforce resource business rules in PostgreSQL, not in the Python API or CLI.
 - Maintain SQL migrations in numbered files ordered by execution dependency. Follow the initialization and migration requirements in `TECHNICAL_REQ.md`.
+- Every completed public PostgreSQL API function must construct its response envelope through `arkkan.api_response(operation_name, result, data, reason)`. Supply the operation-specific JSONB payload for success or a concise, safe reason for error; do not construct the envelope independently or return raw database diagnostics. Test the exact operation name and response shape at the public API boundary. An invalid internal helper call is a programming error, not an ordinary API error response.
 
 ## 8. Logging and Diagnostics
 

@@ -33,6 +33,12 @@ def _reset_application() -> None:
                     sql.Identifier("arkkan"), sql.Identifier(table)))
                 connection.execute(sql.SQL("DROP FUNCTION IF EXISTS {}.{}() RESTRICT").format(
                     sql.Identifier("arkkan"), sql.Identifier(f"reject_{table}_change")))
+            for signature in (
+                "api_response(text, text, jsonb, text)",
+                "api_identifier_valid(text)", "api_state_valid(text)", "api_mode_valid(text)",
+            ):
+                # All signatures are fixed test-owned identifiers, never caller inputs.
+                connection.execute(f"DROP FUNCTION IF EXISTS arkkan.{signature} RESTRICT")
             connection.execute("DROP SCHEMA IF EXISTS arkkan_api RESTRICT")
             connection.execute("DROP SCHEMA IF EXISTS arkkan RESTRICT")
             connection.execute("DROP ROLE IF EXISTS arkkan_admin")
@@ -78,7 +84,12 @@ def _state(connection: "Connection[Any]") -> tuple[Any, ...]:
         JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
         WHERE n.nspname IN ('arkkan', 'arkkan_api') ORDER BY n.nspname, c.relname
     """).fetchall()
-    return schemas, roles, identity, relations
+    functions = connection.execute("""
+        SELECT n.nspname, p.proname, p.oid FROM pg_catalog.pg_proc AS p
+        JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+        WHERE n.nspname IN ('arkkan', 'arkkan_api') ORDER BY n.nspname, p.proname, p.oid
+    """).fetchall()
+    return schemas, roles, identity, relations, functions
 
 
 def _cli(*args: str) -> subprocess.CompletedProcess[str]:
@@ -92,17 +103,17 @@ def _cli(*args: str) -> subprocess.CompletedProcess[str]:
 def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> None:
     with _staging_connection(_ROOT) as connection:
         before = _state(connection)
-        assert before[0] == [] and before[1] == [] and before[3] == []
+        assert before[0] == [] and before[1] == [] and before[3] == [] and before[4] == []
     for args in ((), ("--check",)):
         result = _cli(*args)
         assert result.returncode == 0, result.stderr
-        assert result.stdout.count("[PENDING]") == 12
+        assert result.stdout.count("[PENDING]") == 16
         assert "[APPLIED]" not in result.stdout
         with _staging_connection(_ROOT) as connection:
             assert _state(connection) == before
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[APPLIED]") == 12
+    assert result.stdout.count("[APPLIED]") == 16
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[2] == before[2] == [(True, "staging")]
@@ -124,7 +135,7 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
         """).fetchall() == [(slug, seeds[slug], True) for slug in sorted(seeds)]
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[UNCHANGED]") == 12
+    assert result.stdout.count("[UNCHANGED]") == 16
     assert "[APPLIED]" not in result.stdout
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
@@ -353,3 +364,139 @@ def test_s2_067_actual_step_rollback(_clean_application: None) -> None:
                 for table in ("marker", "later"):
                     connection.execute(sql.SQL("DROP TABLE IF EXISTS {}.{} RESTRICT").format(identifier, sql.Identifier(table)))
                 connection.execute(sql.SQL("DROP SCHEMA IF EXISTS {} RESTRICT").format(identifier))
+
+
+def test_s3_001_response_contract(_initialized: None) -> None:
+    from psycopg.types.json import Jsonb
+
+    with _staging_connection(_ROOT) as connection:
+        for data in ({"content": "", "optional": None}, [], [{"slug": "x"}]):
+            response = connection.execute(
+                "SELECT arkkan.api_response(%s, 'success', %s, NULL)",
+                ("get_resource_content", Jsonb(data)),
+            ).fetchone()[0]
+            assert response == {"operation_name": "get_resource_content",
+                                "message_type": "response", "result": "success", "data": data}
+        response = connection.execute(
+            "SELECT arkkan.api_response(%s, 'error', NULL, %s)",
+            ("get_resource_content", "Requested resource version is unavailable."),
+        ).fetchone()[0]
+        assert response == {"operation_name": "get_resource_content", "message_type": "response",
+                            "result": "error", "reason": "Requested resource version is unavailable."}
+
+
+def test_s3_002_invalid_response_arguments(_initialized: None) -> None:
+    from psycopg.errors import InvalidParameterValue
+    from psycopg.types.json import Jsonb
+
+    cases = (
+        (None, "success", Jsonb({}), None), (" \t", "success", Jsonb({}), None),
+        ("operation", None, Jsonb({}), None), ("operation", "unknown", Jsonb({}), None),
+        ("operation", "success", None, None), ("operation", "success", Jsonb(None), None),
+        ("operation", "success", Jsonb("secret"), None),
+        ("operation", "success", Jsonb({}), "secret"),
+        ("operation", "error", Jsonb({}), "secret"),
+        ("operation", "error", None, None), ("operation", "error", None, " \t\n"),
+    )
+    with _staging_connection(_ROOT) as connection:
+        for arguments in cases:
+            with pytest.raises(InvalidParameterValue) as error:
+                with connection.transaction():
+                    connection.execute("SELECT arkkan.api_response(%s, %s, %s::jsonb, %s)", arguments)
+            assert "secret" not in str(error.value)
+
+
+def test_s3_003_shared_validation(_initialized: None) -> None:
+    cases = (
+        ("api_identifier_valid", ("x", " x ", "X", "0"), (None, "", " \t\n")),
+        ("api_state_valid", ("enabled", "enabled_default", "disabled", "obsolete"),
+         (None, "", "Enabled", " enabled", "invalid")),
+        ("api_mode_valid", ("strict", "version_priority", "default_priority"),
+         (None, "", "Strict", " strict", "invalid")),
+    )
+    with _staging_connection(_ROOT) as connection:
+        for name, valid, invalid in cases:
+            for values, expected in ((valid, True), (invalid, False)):
+                for value in values:
+                    assert connection.execute(
+                        f"SELECT arkkan.{name}(%s::text)", (value,)
+                    ).fetchone() == (expected,)
+
+
+@pytest.mark.parametrize("role", ["arkkan_admin", "arkkan_user"])
+def test_s3_004_private_helpers_denied(_initialized: None, role: str) -> None:
+    from psycopg import sql
+    from psycopg.errors import InsufficientPrivilege
+
+    with _staging_connection(_ROOT) as connection:
+        for signature, arguments in (
+            ("api_response(text, text, jsonb, text)", "'operation', 'success', '{}'::jsonb, NULL"),
+            ("api_identifier_valid(text)", "'x'"),
+            ("api_state_valid(text)", "'enabled'"),
+            ("api_mode_valid(text)", "'strict'"),
+        ):
+            assert connection.execute(
+                "SELECT pg_catalog.has_function_privilege(%s, %s, 'EXECUTE')",
+                (role, f"arkkan.{signature}"),
+            ).fetchone() == (False,)
+            with pytest.raises(InsufficientPrivilege):
+                with connection.transaction(force_rollback=True):
+                    # Grant schema usage temporarily to test function ACL independently.
+                    connection.execute(sql.SQL("GRANT USAGE ON SCHEMA arkkan TO {}").format(sql.Identifier(role)))
+                    connection.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+                    connection.execute(f"SELECT arkkan.{signature.split('(')[0]}({arguments})")
+
+
+@pytest.mark.parametrize("statement,cleanup", [
+    ("ALTER FUNCTION arkkan.api_response(text,text,jsonb,text) SECURITY DEFINER", None),
+    ("GRANT EXECUTE ON FUNCTION arkkan.api_response(text,text,jsonb,text) TO PUBLIC", None),
+    ("CREATE FUNCTION arkkan.api_response(text,text,text,text) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'",
+     "DROP FUNCTION arkkan.api_response(text,text,text,text)"),
+])
+def test_s3_005_helper_conflict(_initialized: None, statement: str, cleanup: str | None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        connection.execute(statement)
+    try:
+        for apply in (False, True):
+            with pytest.raises(ValueError, match="Conflicting internal API helper"):
+                _run(apply=apply)
+    finally:
+        if cleanup is not None:
+            with _staging_connection(_ROOT) as connection:
+                connection.execute(cleanup)
+
+
+def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        _run_migrations(connection, _migration_list(_ROOT)[:12], apply=True,
+                        lock_key=_LOCK, report=lambda message: None)
+        _records(connection)
+        connection.execute("UPDATE arkkan.resource_types SET description = 'edited' WHERE slug = 'role'")
+        before = _state(connection)
+        queries = (
+            "SELECT type_id, slug, description, is_system FROM arkkan.resource_types ORDER BY slug",
+            "SELECT resource_id, name, slug, description, type_id FROM arkkan.resource_definitions ORDER BY slug",
+            "SELECT version_id, resource_id, version, state, content, version_info, created_at "
+            "FROM arkkan.resource_versions ORDER BY version_id",
+        )
+        data_before = [connection.execute(query).fetchall() for query in queries]
+    plan = _run(apply=False)
+    assert [line for line in plan if line.startswith("[PENDING]")] == [
+        "[PENDING] 013_api_response", "[PENDING] 014_api_identifier_valid",
+        "[PENDING] 015_api_state_valid", "[PENDING] 016_api_mode_valid",
+    ]
+    with _staging_connection(_ROOT) as connection:
+        assert _state(connection) == before
+        assert [connection.execute(query).fetchall() for query in queries] == data_before
+    applied = _run(apply=True)
+    assert [line for line in applied if line.startswith("[APPLIED]")] == [
+        line.replace("[PENDING]", "[APPLIED]") for line in plan if line.startswith("[PENDING]")
+    ]
+    with _staging_connection(_ROOT) as connection:
+        after = _state(connection)
+        assert after[:4] == before[:4]
+        assert set(before[4]).issubset(after[4]) and len(after[4]) == len(before[4]) + 4
+        assert [connection.execute(query).fetchall() for query in queries] == data_before
+    assert not any(line.startswith("[APPLIED]") for line in _run(apply=True))
+    with _staging_connection(_ROOT) as connection:
+        assert _state(connection) == after

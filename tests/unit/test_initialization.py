@@ -223,8 +223,8 @@ def test_s2_058_reject_unsafe_configuration(
 
 def test_s2_059_migration_manifest_and_seed_mapping() -> None:
     migrations = _migration_list(_ROOT)
-    assert len(migrations) == 12
-    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 13)]
+    assert len(migrations) == 16
+    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 17)]
     folder = _ROOT / "sql" / "migrations"
     assert {f"{migration.name}.sql" for migration in migrations} == {
         path.name for path in folder.glob("*.sql")
@@ -286,3 +286,34 @@ def test_s2_068_connection_prerequisites(
     assert options["require_auth"] == "scram-sha-256"
     assert options["autocommit"] is True and options["hostaddr"] == "127.0.0.1"
     assert "password" not in options
+
+
+@pytest.mark.parametrize("mutation", [None, "missing", "body", "signature", "owner", "acl", "definer", "overload"])
+def test_s3_006_helper_catalog_check(mutation: str | None) -> None:
+    from arkkan._db_migrations import _api_helper_ready
+
+    expected = ["body", "f", True, "sql", "text", ["value"], "boolean",
+                False, False, "i", False, "u", ["search_path=pg_catalog"],
+                0, True, True, False, True]
+    changed = {"body": (0, "different"), "signature": (4, "integer"),
+               "owner": (2, False), "acl": (17, False), "definer": (8, True)}
+    if mutation in changed:
+        index, value = changed[mutation]
+        expected[index] = value
+    rows = [] if mutation == "missing" else [tuple(expected)]
+    if mutation == "overload":
+        rows.append(tuple(expected))
+
+    def execute(statement: str, params: tuple[str, ...]) -> Any:
+        assert params == ("api_identifier_valid",)
+        assert "pg_catalog.pg_proc" in statement
+        return SimpleNamespace(fetchall=lambda: rows)
+
+    connection = SimpleNamespace(execute=execute)
+    kwargs = dict(name="api_identifier_valid", language="sql", arguments=(("value", "text"),),
+                  return_type="boolean", body="body")
+    if mutation in (None, "missing"):
+        assert _api_helper_ready(connection, **kwargs) is (mutation is None)
+    else:
+        with pytest.raises(ValueError, match="Conflicting internal API helper"):
+            _api_helper_ready(connection, **kwargs)
