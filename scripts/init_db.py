@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect or initialize the existing application database (Stage 3 API foundation)."""
+"""Inspect or initialize the existing application database (Stage 3 PostgreSQL API)."""
 
 import argparse
 import logging
@@ -79,7 +79,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
                     _verify_identity(connection, identity)
             print(f"[INFO] Database: {settings['PGDATABASE']}; "
                   f"role: {settings['PGUSER']}; mode: {'apply' if args.apply else 'dry run'}.", flush=True)
-            print("[INFO] Stage 3 API foundation; public API functions and grants are not yet installed.", flush=True)
+            print("[INFO] Stage 3 PostgreSQL API; verifying all functions and role grants.", flush=True)
             _run_migrations(connection, migrations, apply=args.apply, lock_key=_LOCK_KEY,
                             report=lambda message: print(message, flush=True))
     except ValueError as error:

@@ -238,7 +238,7 @@ pending the consolidated Stage 3 staging validation. Collection is not a pass.
 | S3-018 | Initialization / conflicting-object failures; Security | `test_s3_018_write_function_conflict`: check and apply reject changed security mode/search path, PUBLIC execute grants and conflicting overloads without replacing existing objects. |
 | S3-019 | Initialization / idempotency; data preservation | `test_s3_019_upgrade_preserves_wp1`: initialize WP1, retain populated records and existing object identifiers through read-only planning and five-step upgrade, and verify an unchanged rerun. |
 | S3-020 | Common API Contracts / concurrency and atomicity | `test_s3_020_concurrent_writes`: concurrent new/existing default creation keeps exactly one default; duplicate versions and competing immutable types produce one success; type deletion and resource creation cannot create an orphan; disjoint metadata updates both survive. |
-| S3-021 | Common API Contracts / serialized resource writes | `test_s3_021_resource_writes_wait_for_lock`: hold a resource row lock and observe each add/update call blocked by that backend before releasing the lock and verifying success; avoids relying only on simultaneous thread scheduling. |
+| S3-021 | Common API Contracts / serialized resource writes | `test_s3_021_resource_writes_wait_for_lock`: hold a resource row lock and observe every resource mutation, including cleanup, blocked by that backend before releasing the lock and verifying success; avoids relying only on simultaneous thread scheduling. |
 
 The shared WP2 call helper checks exact operation names, response keys, result
 values and object payloads or nonblank error reasons for every completed call.
@@ -276,3 +276,22 @@ remain pending consolidated staging execution.
 | S3-025 | Bulk state operations; default policies | `test_s3_025_bulk_state_policy`: reject partial-invalid, same-state, default-removal and multiple-default outcomes; preserve selected membership during promotion; cover successful bulk transitions, zero matches, empty resources and invalid states/targets. |
 | S3-026 | Admin API / Delete Operations | `test_s3_026_deletion_contracts`: single, resource-wide and global obsolete deletion preserve definitions; explicit deletion accepts empty/all-obsolete resources and rejects active versions; counts, missing/invalid targets and retained types match contracts. |
 | S3-027 | Common API Contracts / rollback | `test_s3_027_mutation_failure_rolls_back`: injected serialization failures after mutation roll back explicit deletion, cleanup and bulk state changes without leaking diagnostics. |
+
+
+### Work Package 5: Access grants and complete initialization
+
+Migration 037 grants CONNECT on the selected database, USAGE on `arkkan_api`,
+all public functions to administrators, and only read functions to users.
+Catalog checks reject excess or grantable privileges; missing authorized grants
+are pending work. The cumulative inventory is 37 migrations and 18 public SQL
+signatures for the 16 operations. S3-017 explicitly initializes the WP2 subset
+to retain verification of that intermediate checkpoint. S3-004 also covers
+both private state helpers. Database execution remains pending staging.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S3-028 | Security; Common API Contracts / Authorization | `test_s3_028_final_role_permissions`: verify and exercise every signature under both roles, successful read call forms, denial of user writes, schema creation and direct table access. |
+| S3-029 | Initialization / idempotency and rollback | `test_s3_029_access_reconciliation_and_rollback`: a failure after grant SQL rolls back the entire step; partial/missing authorized grants reconcile without changing resource data or edited seed descriptions; reruns apply no changes. |
+| S3-030 | Security; Initialization / conflict rejection | `test_s3_030_excess_access_rejected`: reject user writes, PUBLIC execution, grant options, schema creation, internal schema usage and private-helper execution in both check/apply modes. |
+| S3-031 | Initialization / planning access grants | `test_s3_031_access_readiness` in `tests/unit/test_initialization.py`: missing roles, database/schema privileges or required function permissions prevent reporting access ready; the complete simulated contract succeeds. |
+| S3-032 | Resource States; concurrency | `test_s3_032_concurrent_default_promotions`: competing promotions through `set_resource_state` serialize, both succeed, preserve all versions and leave exactly one default. |

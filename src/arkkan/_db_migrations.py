@@ -92,7 +92,7 @@ _API_HELPERS = (
 )
 
 
-# WP2 functions remain owner-only until the access-grant work package. Defaults
+# WP2 functions are created owner-only; migration 037 grants runtime access. Defaults
 # use PostgreSQL's catalog expression form, not the spelling in the SQL file.
 _API_WRITES = (
     ("add_resource_type", (("slug", "text"), ("description", "text")), "NULL::text"),
@@ -152,7 +152,13 @@ def _schema_ready(connection: "Connection[Any]", schema: str) -> bool:
                NOT EXISTS (
                    SELECT 1 FROM pg_catalog.aclexplode(COALESCE(
                        nspacl, pg_catalog.acldefault('n', nspowner))) AS acl
-                   WHERE acl.grantee <> nspowner
+                   WHERE acl.grantee <> nspowner AND NOT (
+                       nspname = 'arkkan_api' AND acl.privilege_type = 'USAGE'
+                       AND NOT acl.is_grantable AND acl.grantee IN (
+                           SELECT oid FROM pg_catalog.pg_roles
+                           WHERE rolname IN ('arkkan_admin', 'arkkan_user')
+                       )
+                   )
                )
         FROM pg_catalog.pg_namespace WHERE nspname = %s
     """, (schema,)).fetchone()
@@ -395,6 +401,9 @@ def _api_function_ready(
     arguments: tuple[tuple[str, str], ...], return_type: str, body: str,
     schema: str = "arkkan", defaults: str | None = None,
 ) -> bool:
+    roles = ("arkkan_admin", "arkkan_user") if name in _READ_NAMES else ("arkkan_admin",)
+    if schema != "arkkan_api":
+        roles = ()
     rows = connection.execute("""
         SELECT p.prosrc, p.prokind, pg_catalog.pg_get_userbyid(p.proowner) = CURRENT_USER,
                l.lanname, pg_catalog.oidvectortypes(p.proargtypes), p.proargnames,
@@ -406,13 +415,17 @@ def _api_function_ready(
                NOT EXISTS (
                    SELECT 1 FROM pg_catalog.aclexplode(COALESCE(
                        p.proacl, pg_catalog.acldefault('f', p.proowner))) AS acl
-                   WHERE acl.grantee <> p.proowner
+                   WHERE acl.grantee <> p.proowner AND NOT (
+                       acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable
+                       AND acl.grantee IN (SELECT oid FROM pg_catalog.pg_roles
+                                           WHERE rolname = ANY(%s::text[]))
+                   )
                )
         FROM pg_catalog.pg_proc AS p
         JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
         JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
         WHERE n.nspname = %s AND p.proname = %s
-    """, (schema, name)).fetchall()
+    """, (list(roles), schema, name)).fetchall()
     if schema == "arkkan_api":
         signatures = {", ".join(kind for _, kind in args)
                       for function, args, _ in _PUBLIC_FUNCTIONS if function == name}
@@ -431,6 +444,36 @@ def _api_function_ready(
                 True, True, False, defaults, True)
     if rows != [expected]:
         raise ValueError(f"Conflicting API function {schema}.{name}.")
+    return True
+
+
+def _access_ready(connection: "Connection[Any]") -> bool:
+    # Earlier checks reject excessive privileges. Here, missing authorized
+    # grants are pending work, including an interrupted partial initialization.
+    for role in ("arkkan_admin", "arkkan_user"):
+        if not connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = %s)", (role,)
+        ).fetchone()[0]:
+            return False
+        if not connection.execute(
+            "SELECT pg_catalog.has_database_privilege(%s, current_database(), 'CONNECT')",
+            (role,),
+        ).fetchone()[0]:
+            return False
+        if not connection.execute(
+            "SELECT pg_catalog.has_schema_privilege(%s, pg_catalog.to_regnamespace('arkkan_api'), 'USAGE')",
+            (role,),
+        ).fetchone()[0]:
+            return False
+        for name, arguments, _ in _PUBLIC_FUNCTIONS:
+            if role == "arkkan_user" and name not in _READ_NAMES:
+                continue
+            signature = f"arkkan_api.{name}({', '.join(kind for _, kind in arguments)})"
+            if not connection.execute(
+                "SELECT pg_catalog.has_function_privilege(%s, pg_catalog.to_regprocedure(%s), 'EXECUTE')",
+                (role, signature),
+            ).fetchone()[0]:
+                return False
     return True
 
 
@@ -530,4 +573,5 @@ def _migration_list(root: Path) -> tuple[_Migration, ...]:
                               schema="arkkan_api", defaults=defaults),
             partial(_execute_sql, statement=statement),
         ))
+    _add("037_api_access", _access_ready)
     return tuple(migrations)

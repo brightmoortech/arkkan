@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from arkkan._db_migrations import _API_WRITES, _PUBLIC_FUNCTIONS, _migration_list
+from arkkan._db_migrations import _API_WRITES, _PUBLIC_FUNCTIONS, _READ_NAMES, _migration_list
 from arkkan._migration_workflow import _Migration, _run_migrations
 from arkkan._test_safety import _staging_connection
 
@@ -47,8 +47,12 @@ def _reset_application() -> None:
                 connection.execute(f"DROP FUNCTION IF EXISTS arkkan.{signature} RESTRICT")
             connection.execute("DROP SCHEMA IF EXISTS arkkan_api RESTRICT")
             connection.execute("DROP SCHEMA IF EXISTS arkkan RESTRICT")
-            connection.execute("DROP ROLE IF EXISTS arkkan_admin")
-            connection.execute("DROP ROLE IF EXISTS arkkan_user")
+            database = connection.execute("SELECT current_database()").fetchone()[0]
+            for role in ("arkkan_admin", "arkkan_user"):
+                if connection.execute("SELECT pg_catalog.to_regrole(%s)", (role,)).fetchone()[0] is not None:
+                    connection.execute(sql.SQL("REVOKE CONNECT ON DATABASE {} FROM {}").format(
+                        sql.Identifier(database), sql.Identifier(role)))
+                    connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
 
 
 @pytest.fixture
@@ -113,13 +117,13 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
     for args in ((), ("--check",)):
         result = _cli(*args)
         assert result.returncode == 0, result.stderr
-        assert result.stdout.count("[PENDING]") == 36
+        assert result.stdout.count("[PENDING]") == 37
         assert "[APPLIED]" not in result.stdout
         with _staging_connection(_ROOT) as connection:
             assert _state(connection) == before
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[APPLIED]") == 36
+    assert result.stdout.count("[APPLIED]") == 37
     with _staging_connection(_ROOT) as connection:
         after = _state(connection)
         assert after[2] == before[2] == [(True, "staging")]
@@ -141,7 +145,7 @@ def test_s2_060_clean_initialization_and_dry_run(_clean_application: None) -> No
         """).fetchall() == [(slug, seeds[slug], True) for slug in sorted(seeds)]
     result = _cli("--apply")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("[UNCHANGED]") == 36
+    assert result.stdout.count("[UNCHANGED]") == 37
     assert "[APPLIED]" not in result.stdout
     with _staging_connection(_ROOT) as connection:
         assert _state(connection) == after
@@ -440,6 +444,8 @@ def test_s3_004_private_helpers_denied(_initialized: None, role: str) -> None:
             ("api_identifier_valid(text)", "'x'"),
             ("api_state_valid(text)", "'enabled'"),
             ("api_mode_valid(text)", "'strict'"),
+            ("api_transition_valid(text,text)", "'disabled', 'enabled'"),
+            ("api_set_states(text,text,text,text)", "'set_resource_state_all', 'r', NULL, 'enabled'"),
         ):
             assert connection.execute(
                 "SELECT pg_catalog.has_function_privilege(%s, %s, 'EXECUTE')",
@@ -510,7 +516,7 @@ def test_s3_007_upgrade_preserves_stage2_database(_clean_application: None) -> N
 
 
 def _call(connection: "Connection[Any]", name: str, *arguments: Any) -> dict[str, Any]:
-    """Call only fixed WP2 function names and check their response envelope."""
+    """Call only declared public functions and check their response envelope."""
     from psycopg import sql
 
     assert name in {item[0] for item in _PUBLIC_FUNCTIONS}
@@ -740,11 +746,13 @@ def test_s3_016_invalid_updates_are_atomic(_initialized: None) -> None:
 
 
 @pytest.mark.parametrize("role", ["arkkan_admin", "arkkan_user"])
-def test_s3_017_write_functions_restricted(_initialized: None, role: str) -> None:
+def test_s3_017_write_functions_restricted(_clean_application: None, role: str) -> None:
     from psycopg import sql
     from psycopg.errors import InsufficientPrivilege
 
     with _staging_connection(_ROOT) as connection:
+        _run_migrations(connection, _migration_list(_ROOT)[:21], apply=True,
+                        lock_key=_LOCK, report=lambda message: None)
         for name, arguments, _ in _API_WRITES:
             signature = f"arkkan_api.{name}({', '.join(kind for _, kind in arguments)})"
             assert connection.execute(
@@ -878,7 +886,11 @@ def test_s3_020_concurrent_writes(_initialized: None, scenario: str) -> None:
             ).fetchone() == (("custom", "role")[winner],)
 
 
-@pytest.mark.parametrize("operation", ["add_resource", "update_resource"])
+@pytest.mark.parametrize("operation", [
+    "add_resource", "update_resource", "delete_resource_version", "delete_resource_version_all",
+    "clean_up", "delete_resource", "set_resource_state", "set_resource_state_all",
+    "set_resource_state_all_with_guard",
+])
 def test_s3_021_resource_writes_wait_for_lock(_initialized: None, operation: str) -> None:
     from concurrent.futures import ThreadPoolExecutor
     from queue import Queue
@@ -894,11 +906,23 @@ def test_s3_021_resource_writes_wait_for_lock(_initialized: None, operation: str
             if operation == "add_resource":
                 return _call(connection, operation, "resource", "next", None,
                              None, None, "", None, "enabled_default")
-            return _call(connection, operation, "resource", Jsonb({"name": "Updated"}))
+            arguments = {
+                "update_resource": ("resource", Jsonb({"name": "Updated"})),
+                "delete_resource_version": ("resource", "opaque-version"),
+                "delete_resource_version_all": ("resource",), "clean_up": (),
+                "delete_resource": ("resource",),
+                "set_resource_state": ("resource", "opaque-version", "enabled"),
+                "set_resource_state_all": ("resource", "enabled"),
+                "set_resource_state_all_with_guard": ("resource", "disabled", "enabled"),
+            }
+            return _call(connection, operation, *arguments[operation])
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         with _staging_connection(_ROOT) as connection:
             _records(connection)
+            connection.execute("UPDATE arkkan.resource_versions SET state = %s", (
+                "obsolete" if operation.startswith("delete_") or operation == "clean_up" else "disabled",
+            ))
             with connection.transaction():
                 connection.execute(
                     "SELECT resource_id FROM arkkan.resource_definitions "
@@ -1131,3 +1155,117 @@ def test_s3_027_mutation_failure_rolls_back(
             result = _call(connection, operation, *args)
             assert result['result'] == 'error' and 'sensitive' not in result['reason']
             assert _snapshot(connection) == before
+
+
+@pytest.mark.parametrize('role', ['arkkan_admin', 'arkkan_user'])
+def test_s3_028_final_role_permissions(_initialized: None, role: str) -> None:
+    from psycopg import sql
+    from psycopg.errors import InsufficientPrivilege
+
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        for name, arguments, _ in _PUBLIC_FUNCTIONS:
+            expected = role == 'arkkan_admin' or name in _READ_NAMES
+            signature = f"arkkan_api.{name}({', '.join(kind for _, kind in arguments)})"
+            assert connection.execute(
+                "SELECT pg_catalog.has_function_privilege(%s, %s, 'EXECUTE')", (role, signature)
+            ).fetchone() == (expected,)
+            with connection.transaction(force_rollback=True):
+                connection.execute(sql.SQL('SET LOCAL ROLE {}').format(sql.Identifier(role)))
+                invocation = f"SELECT arkkan_api.{name}({', '.join('NULL::' + kind for _, kind in arguments)})"
+                if expected:
+                    result = connection.execute(invocation).fetchone()[0]
+                    assert result['operation_name'] == name and result['message_type'] == 'response'
+                else:
+                    with pytest.raises(InsufficientPrivilege):
+                        with connection.transaction():
+                            connection.execute(invocation)
+        with connection.transaction(force_rollback=True):
+            connection.execute(sql.SQL('SET LOCAL ROLE {}').format(sql.Identifier(role)))
+            assert _call(connection, 'get_resource_content', 'resource')['data']['content'] == ''
+            assert _call(connection, 'get_resource_content', 'resource', 'opaque-version')['result'] == 'success'
+            assert _call(connection, 'get_resource_content', 'resource', 'missing', 'version_priority')['result'] == 'success'
+            assert _call(connection, 'get_resource_info', 'resource')['result'] == 'success'
+            assert _call(connection, 'get_resource_version_default', 'resource')['result'] == 'success'
+            assert _call(connection, 'list_resources_matching_type', 'custom')['result'] == 'success'
+            for statement in ('CREATE TABLE arkkan_api.forbidden (x int)',
+                              'SELECT slug FROM arkkan.resource_definitions'):
+                with pytest.raises(InsufficientPrivilege):
+                    with connection.transaction():
+                        connection.execute(statement)
+
+
+def test_s3_029_access_reconciliation_and_rollback(_clean_application: None) -> None:
+    with _staging_connection(_ROOT) as connection:
+        migrations = _migration_list(_ROOT)
+        _run_migrations(connection, migrations[:-1], apply=True,
+                        lock_key=_LOCK, report=lambda message: None)
+        _records(connection)
+        before = _snapshot(connection)
+        connection.execute("UPDATE arkkan.resource_types SET description = 'edited' WHERE slug = 'role'")
+        before = _snapshot(connection)
+        # The grant migration is a single transaction: an injected failure
+        # after its actual SQL must revoke all of that step's effects.
+        def fail_after_grants(conn: 'Connection[Any]') -> None:
+            migrations[-1].apply(conn)
+            raise ValueError('Injected grant failure')
+
+        failed = _Migration(migrations[-1].name, migrations[-1].check, fail_after_grants)
+        with pytest.raises(ValueError, match='Injected grant failure'):
+            _run_migrations(connection, (*migrations[:-1], failed), apply=True,
+                            lock_key=_LOCK, report=lambda message: None)
+        assert not migrations[-1].check(connection)
+        assert connection.execute("SELECT pg_catalog.has_schema_privilege('arkkan_admin', 'arkkan_api', 'USAGE')").fetchone() == (False,)
+        assert _snapshot(connection) == before
+        connection.execute('GRANT USAGE ON SCHEMA arkkan_api TO arkkan_admin')
+    plan = _run(apply=False)
+    assert [line for line in plan if line.startswith('[PENDING]')] == ['[PENDING] 037_api_access']
+    assert [line for line in _run(apply=True) if line.startswith('[APPLIED]')] == ['[APPLIED] 037_api_access']
+    with _staging_connection(_ROOT) as connection:
+        assert _snapshot(connection) == before
+        connection.execute('REVOKE EXECUTE ON FUNCTION arkkan_api.get_resource_info(text) FROM arkkan_user')
+    assert [line for line in _run(apply=True) if line.startswith('[APPLIED]')] == ['[APPLIED] 037_api_access']
+    assert not any(line.startswith('[APPLIED]') for line in _run(apply=True))
+
+
+@pytest.mark.parametrize('statement', [
+    'GRANT EXECUTE ON FUNCTION arkkan_api.clean_up() TO arkkan_user',
+    'GRANT EXECUTE ON FUNCTION arkkan_api.get_resource_info(text) TO PUBLIC',
+    'GRANT EXECUTE ON FUNCTION arkkan_api.get_resource_info(text) TO arkkan_user WITH GRANT OPTION',
+    'GRANT CREATE ON SCHEMA arkkan_api TO arkkan_admin',
+    'GRANT USAGE ON SCHEMA arkkan_api TO PUBLIC',
+    'GRANT USAGE ON SCHEMA arkkan TO arkkan_user',
+    'GRANT EXECUTE ON FUNCTION arkkan.api_set_states(text,text,text,text) TO arkkan_admin',
+])
+def test_s3_030_excess_access_rejected(_initialized: None, statement: str) -> None:
+    with _staging_connection(_ROOT) as connection:
+        connection.execute(statement)
+    for apply in (False, True):
+        with pytest.raises(ValueError, match='Conflicting'):
+            _run(apply=apply)
+
+
+def test_s3_032_concurrent_default_promotions(_initialized: None) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    with _staging_connection(_ROOT) as connection:
+        _records(connection)
+        for version in ('a', 'b'):
+            assert _call(connection, 'add_resource', 'resource', version)['result'] == 'success'
+    barrier = Barrier(2, timeout=15)
+
+    def promote(version: str) -> dict[str, Any]:
+        with _staging_connection(_ROOT) as connection:
+            connection.execute("SET statement_timeout = '10s'")
+            barrier.wait()
+            return _call(connection, 'set_resource_state', 'resource', version, 'enabled_default')
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(promote, version) for version in ('a', 'b')]
+        assert all(future.result(timeout=20)['result'] == 'success' for future in futures)
+    with _staging_connection(_ROOT) as connection:
+        rows = connection.execute('SELECT version, state FROM arkkan.resource_versions').fetchall()
+        assert len(rows) == 3
+        assert sum(state == 'enabled_default' for _, state in rows) == 1
+        assert all(state in ('enabled', 'enabled_default') for _, state in rows)

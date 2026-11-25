@@ -173,21 +173,16 @@ staging.
 
 ## Application Database Initialization
 
-Stage 2 was accepted on November 24, 2026. Stage 3 WP1 adds the private API
-response and input-validation helpers through migrations 013–016. WP2 adds
-`add_resource_type`, `update_resource_type`, `delete_resource_type`,
-`add_resource`, and `update_resource` through migrations 017–021. These five
-functions use `arkkan_api` but remain owner-only at this checkpoint; runtime
-role grants are deferred to WP5. WP3 adds the four read operations through
-migrations 022–027, including three `get_resource_content` call signatures.
-WP4 adds lifecycle helpers and all deletion/state operations through migrations
-028–036. All resource functions remain owner-only until WP5. No Python resource
-API or CLI is available.
+Stage 2 was accepted on November 24, 2026. Stage 3 implements all 16 PostgreSQL
+resource operations, including the three `get_resource_content` signatures.
+Migrations 013–036 add private helpers and public functions; migration 037
+grants schema usage and appropriate function execution to `arkkan_admin` and
+`arkkan_user`. Ordinary roles have no direct application-table or private-helper
+access. No Python resource API or CLI is available yet.
 
-The Stage 3 migrations still require PostgreSQL validation. Staging deployment
-and full integration validation are consolidated at the end of Stage 3.
-Use the provisioned development instance for manual initialization, and reserve
-the staging instance for automated validation.
+The cumulative inventory is 37 migrations. PostgreSQL validation remains
+pending the consolidated Stage 3 staging run. Use the provisioned development
+instance for manual initialization and staging for automated database tests.
 
 From the configured development checkout, with the environment verified by
 `manage_environment.py check`, run:
@@ -199,9 +194,9 @@ From the configured development checkout, with the environment verified by
 This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
 superuser privileges, local environment identity, and all ordered migration
 steps without writing to the database. Review the target and the `PENDING`
-and `UNCHANGED` results. On a compliant WP3 database, the WP4 dry run should
-report migrations 001–027 unchanged and 028–036 pending. On a compliant Stage 2
-database, migrations 013–036 should be pending. Apply only after verifying the
+and `UNCHANGED` results. On a compliant WP4 database, the WP5 dry run should
+report migrations 001–036 unchanged and 037 pending. On a compliant Stage 2
+database, migrations 013–037 should be pending. Apply only after verifying the
 intended target and reviewing the plan:
 
 ```bash
@@ -341,7 +336,7 @@ checkout:
 ```
 
 Expect a successful environment check and all installed migration steps
-`UNCHANGED` (36 after WP4 has been applied).
+`UNCHANGED` (37 after Stage 3 has been applied).
 Record the backup and restore exit status and comparison outcome. Resume
 application writes only after verification. Keep the recovery database separate:
 never point `.env`, initialization, or automated tests at it. Its copied identity

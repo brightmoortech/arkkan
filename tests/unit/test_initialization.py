@@ -223,8 +223,8 @@ def test_s2_058_reject_unsafe_configuration(
 
 def test_s2_059_migration_manifest_and_seed_mapping() -> None:
     migrations = _migration_list(_ROOT)
-    assert len(migrations) == 36
-    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 37)]
+    assert len(migrations) == 37
+    assert [migration.name[:3] for migration in migrations] == [f"{n:03}" for n in range(1, 38)]
     folder = _ROOT / "sql" / "migrations"
     assert {f"{migration.name}.sql" for migration in migrations} == {
         path.name for path in folder.glob("*.sql")
@@ -305,7 +305,7 @@ def test_s3_006_helper_catalog_check(mutation: str | None) -> None:
         rows.append(tuple(expected))
 
     def execute(statement: str, params: tuple[str, ...]) -> Any:
-        assert params == ("arkkan", "api_identifier_valid")
+        assert params == ([], "arkkan", "api_identifier_valid")
         assert "pg_catalog.pg_proc" in statement
         return SimpleNamespace(fetchall=lambda: rows)
 
@@ -347,7 +347,7 @@ def test_s3_008_write_function_catalog_check(
         rows *= 2
 
     def execute(statement: str, params: tuple[str, ...]) -> Any:
-        assert params == ("arkkan_api", name)
+        assert params == (["arkkan_admin"], "arkkan_api", name)
         assert "pg_catalog.pg_get_expr(p.proargdefaults, 0)" in statement
         return SimpleNamespace(fetchall=lambda: rows)
 
@@ -359,3 +359,25 @@ def test_s3_008_write_function_catalog_check(
     else:
         with pytest.raises(ValueError, match="Conflicting API function"):
             _api_function_ready(connection, **kwargs)
+
+
+@pytest.mark.parametrize('missing', [None, 'role', 'database', 'schema', 'read', 'write'])
+def test_s3_031_access_readiness(missing: str | None) -> None:
+    from arkkan._db_migrations import _access_ready
+
+    seen: set[str] = set()
+
+    def execute(statement: str, params: tuple[Any, ...]) -> Any:
+        if 'pg_roles' in statement:
+            kind = 'role'
+        elif 'has_database_privilege' in statement:
+            kind = 'database'
+        elif 'has_schema_privilege' in statement:
+            kind = 'schema'
+        else:
+            kind = 'read' if 'get_resource_info' in params[1] else 'write'
+        seen.add(kind)
+        return SimpleNamespace(fetchone=lambda: (kind != missing,))
+
+    assert _access_ready(SimpleNamespace(execute=execute)) is (missing is None)
+    assert missing in seen if missing else seen == {'role', 'database', 'schema', 'read', 'write'}
