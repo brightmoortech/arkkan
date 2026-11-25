@@ -19,6 +19,7 @@ Paths are relative to the repository root. The registry identifies each document
 | [DOCUMENT_GOVERNANCE.md](arkkan.wiki/DOCUMENT_GOVERNANCE.md) | Governs authorized document creation, modification, review, auditing, and delivery. |
 | [BACKLOG.md](arkkan.wiki/BACKLOG.md) | Deferred improvements and proposed outcomes; update when items are identified, approved, deferred, or validated. Not a source of implementation authorization. |
 | [AGENTS.md](AGENTS.md) | Repository documentation registry, reading guidance, and maintenance triggers. |
+| [ARKKAN_HANDOVER.md](ARKKAN_HANDOVER.md) | Continuation snapshot after Stage 3 closeout: completed work, validation evidence, acceptance decision and resume guidance; not a requirements source or authorization. |
 
 ## 2. Document Reading Guidance
 

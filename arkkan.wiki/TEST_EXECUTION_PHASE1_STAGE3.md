@@ -4,7 +4,7 @@
 
 - Execution date: 2026-11-25.
 - Implementation checkpoint: `da6d921758f07356a5fefa340ad63678a09b88d6` (WP5), deployed as a detached staging checkout.
-- Status: all automated validation passed; user acceptance pending.
+- Status: all automated validation passed; explicitly accepted by the owner on 2026-11-25.
 - Environment: the owner's macOS host, Python 3.12.10, pytest 9.1.1,
   Psycopg binary 3.3.9, PostgreSQL `18.7-bookworm` in `arkkan-db-test`;
   database `arkkan_test`, host port 5442.
@@ -145,9 +145,10 @@ implementation reviews or the closeout assessment.
 ## 5. Acceptance and limitations
 
 Stage 3 automated validation passed. All recorded findings are resolved; no
-unresolved Critical or Major issue was identified. User acceptance remains
-separate from implementation and test completion; Stage 4 requires explicit
-authorization.
+unresolved Critical or Major issue was identified. The owner explicitly accepted
+Stage 3 on 2026-11-25 and chose to wait for the CLI before further manual testing.
+No additional owner-run test results were supplied. Stage 4 requires separate
+explicit authorization.
 No Python API, CLI, Linux application deployment, production-readiness claim,
 or new backup/recovery drill is included. The accepted Stage 2 evidence and
 its manual-recovery limitations remain in its historical execution report.

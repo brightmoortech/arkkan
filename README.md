@@ -9,7 +9,7 @@ assemble prompts.
 
 **Current status:** Phase 1, Stage 2 (Database Foundation) was accepted on
 November 24, 2026. Stage 3 implements all 16 PostgreSQL API operations and their
-role permissions; Stage 3 acceptance is pending. See the
+role permissions and was accepted on November 25, 2026. See the
 [Stage 3 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) for validation
 evidence. The public Python API and CLI remain future stages.
 
