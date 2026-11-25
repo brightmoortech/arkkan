@@ -182,7 +182,7 @@ def test_s4_033_invalid_calls_preserve_data(api: Callable[..., dict]) -> None:
 
 
 def test_s4_034_failure_rolls_back(api: Callable[..., dict]) -> None:
-    with _staging_connection(_ROOT) as connection:
+    with _staging_connection(_ROOT) as connection, connection.transaction():
         connection.execute("""CREATE FUNCTION public.python_test_failure() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private diagnostic'; END $$""")
         connection.execute("""CREATE TRIGGER python_test_failure BEFORE INSERT ON
@@ -194,7 +194,7 @@ def test_s4_034_failure_rolls_back(api: Callable[..., dict]) -> None:
         with _staging_connection(_ROOT) as connection:
             assert connection.execute("SELECT count(*) FROM arkkan.resource_definitions").fetchone() == (0,)
     finally:
-        with _staging_connection(_ROOT) as connection:
+        with _staging_connection(_ROOT) as connection, connection.transaction():
             connection.execute("DROP TRIGGER python_test_failure ON arkkan.resource_versions")
             connection.execute("DROP FUNCTION public.python_test_failure() RESTRICT")
     _success(api("add_resource", "rollback", "v", "task"))
