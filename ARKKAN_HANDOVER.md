@@ -2,14 +2,14 @@
 
 **Date:** 2026-11-25
 
-**Resume point:** Stage 3 accepted; Stage 4 Python API is next, subject to authorization
+**Resume point:** Stage 4 WP1 implemented and unit-tested; stop before WP2
 
 **Audience:** A new development chat continuing the existing project.
 
 This is a continuation snapshot, not a requirements source or authorization to
 begin another stage. It supersedes the restart instructions in
 `/Users/haitham/Downloads/ARKKAN_STAGE3_HANDOVER.md`, which described the older
-WP1 checkpoint. Do not restart WP2 or repeat completed packages.
+WP1 checkpoint. Do not repeat completed Stage 3 packages.
 
 ## 1. Current state and completed plan
 
@@ -34,6 +34,26 @@ and 37 ordered migrations. No Stage 3 implementation work is known to remain.
 Python resource wrappers, CLI and end-to-end application workflows remain
 Stages 4, 5 and 6 respectively; they are not missing Stage 3 deliverables.
 
+The owner subsequently authorized Stage 4, with **one work package at a time
+to manage credits**. WP1 implements the private Python execution boundary in
+`src/arkkan/_api.py`: parameterized SQL, per-call runtime configuration,
+transaction/connection cleanup, decoded response validation and safe error
+translation. It adds no public wrappers or dependencies. WP2 requires the owner's
+next instruction; Stage 5 is not authorized.
+
+WP1 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
+passed **311 tests**, including 39 new cases covering S4-001–009. No database
+tests were run for WP1; actual PostgreSQL integration and the cumulative full
+regression remain pending for Stage 4. The package's source and documentation
+are committed together; locate its checkpoint with
+`git log -1 -- src/arkkan/_api.py`. No Stage 4 acceptance is claimed.
+
+WP1 review findings: correctness review removed a redundant rollback attempt
+after rollback failure and added coverage for that path, including combined
+commit/rollback failure. Quality review clarified test typing and formatting.
+Both passes checked cleanup, parameter binding, safe diagnostics and the absence
+of duplicated lifecycle rules. No unresolved WP1 source finding remains.
+
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
@@ -41,7 +61,7 @@ Stages 4, 5 and 6 respectively; they are not missing Stage 3 deliverables.
 - Tested implementation: `da6d921758f07356a5fefa340ad63678a09b88d6`.
 - The closeout commit changes documentation only; source, tests and configuration
   match the tested implementation.
-- All package commits were pushed to `origin/main`; the push completed successfully.
+- All Stage 3 package commits were pushed to `origin/main`; the push completed successfully.
   Before this acceptance update, local `HEAD` and `origin/main` both resolved to
   `f092375`. The handover and acceptance update are delivered in a later documentation commit.
 - Staging: `/Users/haitham/development/stage/arkkan`, clean detached checkout at
@@ -55,7 +75,7 @@ Stages 4, 5 and 6 respectively; they are not missing Stage 3 deliverables.
 The owner prefers repository commits as delivery. Do not produce replacement
 ZIPs unless requested. The earlier ZIP-based handover workflow is obsolete.
 
-## 3. Validation and audit evidence
+## 3. Stage 3 validation and audit evidence
 
 The coding assistant executed tests on the owner's Mac, using the project's
 local virtual environments and isolated staging PostgreSQL instance.
@@ -90,9 +110,10 @@ each received content/compliance and document-quality audits before WP6 was comm
 
 1. **Stage 3 is accepted.** The owner will wait for the CLI before further manual
    testing. No additional owner validation is a pending Stage 3 acceptance gate.
-2. **Stage 4 is not yet authorized.** It is the next implementation stage; obtain
-   authorization before implementing the Python API defined in Technical Requirements.
-   The decision to wait for the CLI does not skip Stage 4 or authorize Stage 5.
+2. **Stage 4 WP1 is implemented; WP2 is pending the owner's instruction.**
+   Remaining packages cover read wrappers, administration wrappers, lifecycle
+   wrappers, integration/regression, and final documentation/acceptance.
+   Stage 4 authorization does not authorize Stage 5.
 3. **No unresolved Stage 3 defect is recorded.** S3-KI-001 through S3-KI-010 are
    retained as resolved findings in the final execution report. Do not delete that
    history or treat resolved findings as unfinished work. Notable corrections were
@@ -194,10 +215,11 @@ Read this handover and governing sources; inspect Git status, recent commits and
 the staging checkout without disturbing an active validation run. Preserve newer
 owner changes. Review any supplied validation results and resolve confirmed issues
 within the authorized scope. Stage 3 acceptance is already recorded; do not ask
-the owner to accept it again. The next authorization checkpoint is Stage 4.
+the owner to accept it again. Stop after Stage 4 WP1 until instructed to start WP2.
 
-Once Stage 4 is explicitly authorized, plan and
-implement the specified Python wrappers, common-response/error handling and tests.
+On the next instruction, implement WP2 read wrappers and their tests using the
+WP1 execution boundary. Continue one package at a time, committing each completed
+package and stopping for the owner's next instruction.
 Use the existing SQL API and configuration infrastructure; do not invent extra public
 operations or begin CLI work. Stage 4 must pass unit and staging integration tests
 for all specified operations and errors before its own acceptance checkpoint.

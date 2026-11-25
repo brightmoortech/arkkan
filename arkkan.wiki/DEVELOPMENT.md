@@ -351,6 +351,19 @@ recovery remain future production-readiness work.
 
 ## Automated Tests
 
+Stage 4 WP1 adds the internal execution boundary in `src/arkkan/_api.py`.
+It reads process configuration for each call, binds SQL parameters, preserves
+decoded JSON responses, commits successful operations, and rolls back rejected
+operations. Connections are closed on failures and interruptions; commit failures
+are not retried automatically because their outcome may be uncertain. Database
+diagnostics are translated into safe error envelopes. Public resource wrappers
+and the CLI are not available at this checkpoint.
+
+The WP1 tests in `tests/unit/test_api.py` use driver doubles. They cover cleanup,
+error translation, response validation and configuration without connecting to
+PostgreSQL. Real Python-to-PostgreSQL integration remains a Stage 4 acceptance
+requirement; these unit tests do not establish it.
+
 Run unit tests in development or staging without starting PostgreSQL:
 
 ```bash

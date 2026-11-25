@@ -299,3 +299,24 @@ both private state helpers.
 | S3-030 | Security; Initialization / conflict rejection | `test_s3_030_excess_access_rejected`: reject user writes, PUBLIC execution, grant options, schema creation, internal schema usage and private-helper execution in both check/apply modes. |
 | S3-031 | Initialization / planning access grants | `test_s3_031_access_readiness` in `tests/unit/test_initialization.py`: missing roles, database/schema privileges or required function permissions prevent reporting access ready; the complete simulated contract succeeds. |
 | S3-032 | Resource States; concurrency | `test_s3_032_concurrent_default_promotions`: competing promotions through `set_resource_state` serialize, both succeed, preserve all versions and leave exactly one default. |
+
+## Phase 1, Stage 4: Python API
+
+### Work Package 1: Execution foundation
+
+These cases are in `tests/unit/test_api.py`. Driver doubles isolate the Python
+execution boundary; no PostgreSQL connection is opened. Public wrappers and
+actual PostgreSQL integration are subsequent packages. Stage 4 acceptance still
+requires all operation/error integration cases and prior-stage regression tests.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S4-001 | Python Interface; Security | `test_s4_001_parameterized_call`: schema-qualified SQL, bound parameters, exact literal/null/boolean values, explicit transactional connection, commit and cleanup. |
+| S4-002 | Common API Contracts / Response JSON | `test_s4_002_decoded_payload`: preserve decoded objects, arrays, empty content, null fields and zero counts. |
+| S4-003 | Common API Contracts / transactional mutations | `test_s4_003_sql_rejection_rolls_back`: preserve the SQL error envelope and roll back instead of committing. |
+| S4-004 | Data Architecture / Configuration Management | `test_s4_004_configuration_failure`: missing/blank required configuration is rejected before connecting; blank settings exercised here, missing settings in S1-003. |
+| S4-005 | Python Interface; Security; error translation | `test_s4_005_safe_failures`: connection, execution, fetch, commit and rollback failures produce safe error envelopes without logging diagnostics or retrying; acquired connections close. |
+| S4-006 | Common API Contracts / Response JSON | `test_s4_006_invalid_response`: reject malformed/mismatched envelopes, roll back and close without returning the invalid payload. |
+| S4-007 | Python Interface / connection lifecycle | `test_s4_007_unexpected_failure_closes`: interruptions and unexpected programming failures propagate after closing the connection; no commit is attempted. Closing an uncommitted connection abandons its transaction. |
+| S4-008 | Data Architecture / runtime configuration | `test_s4_008_configuration_per_call`: reread settings on each call and map environment names to libpq connection options, including the external password-file path. |
+| S4-009 | Python Interface / failure cleanup | `test_s4_009_rollback_failure_closes`: rollback failure after SQL rejection or commit failure still closes, exposes no raw diagnostics and does not retry rollback. |
