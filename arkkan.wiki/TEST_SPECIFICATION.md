@@ -330,10 +330,27 @@ Those database checks remain required for Stage 4 integration validation.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
-| S4-010 | Python Interface; Coding Conventions / public exports | `test_s4_010_public_exports`: exactly the four implemented read functions are exported and documented. |
+| S4-010 | Python Interface; Coding Conventions / public exports | `test_s4_010_public_exports`: the four implemented read functions remain exported and documented, with no duplicate exports. S4-017 checks the cumulative WP3 export set. |
 | S4-011 | Read Operations; literal identifiers; SQL NULL mapping | `test_s4_011_read_mapping`: positional and named identifiers route to the matching operation unchanged, including Unicode, SQL-like text, blank strings and explicit null for SQL validation. |
 | S4-012 | get_resource_content / three call forms and modes | `test_s4_012_content_call_forms`: distinguish omitted version/mode from explicit null; route one, two or three parameters and forward all retrieval modes without implementing selection policy. |
 | S4-013 | get_resource_content / call contract | `test_s4_013_mode_requires_version`: mode without version returns a safe error without execution, including explicit null/empty mode. |
 | S4-014 | Testing and Acceptance / Python input validation | `test_s4_014_invalid_python_types`: reject booleans, numbers, bytes and containers in identifier/version/mode positions without execution or exposing supplied values. |
 | S4-015 | Common API Contracts / decoded response | `test_s4_015_response_passthrough`: preserve success/error envelopes, selected content version, empty content/list, optional null metadata and empty version lists. |
 | S4-016 | Testing and Acceptance / malformed calls | `test_s4_016_malformed_call`: missing, excessive, unknown and duplicate Python arguments raise TypeError before execution. |
+
+### Work Package 3: Resource administration wrappers
+
+Cases in `tests/unit/test_write.py` isolate execution with a test double and use
+the pinned Psycopg JSONB dumper to verify serialization without a connection.
+They establish wrapper behavior, not PostgreSQL business-policy enforcement;
+database integration and the cumulative stage acceptance gate remain pending.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S4-017 | Python Interface; public exports | `test_s4_017_public_exports`: exactly nine documented public operations are exported after WP3, including all five administration wrappers. |
+| S4-018 | Admin API / Write Operations; literal values and defaults | `test_s4_018_write_mapping`: route positional/named arguments unchanged; preserve optional nulls, empty content, disabled default, protected-type targets and invalid state values for SQL validation. |
+| S4-019 | update_resource; omitted versus null metadata | `test_s4_019_json_changes`: serialize exact JSONB keys/values, distinguish SQL NULL from JSON null fields, preserve empty strings, copy the caller's dictionary, and forward version combinations/unknown keys to SQL without implementing policy. |
+| S4-020 | Python input validation; safe errors | `test_s4_020_invalid_changes`: reject non-object changes, non-string keys and non-string/non-null values without execution or disclosure. |
+| S4-021 | Python input validation | `test_s4_021_invalid_text_arguments`: reject invalid types in every text argument position, including attempts to pass JSONB adapters directly, without execution. |
+| S4-022 | Common API Contracts / Response JSON | `test_s4_022_response_passthrough`: preserve success/error dictionaries unchanged for each administration operation. |
+| S4-023 | Testing and Acceptance / malformed calls | `test_s4_023_malformed_call`: missing, excessive, unknown and duplicate Python arguments raise TypeError before execution. |

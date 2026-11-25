@@ -178,8 +178,9 @@ resource operations, including the three `get_resource_content` signatures.
 Migrations 013–036 add private helpers and public functions; migration 037
 grants schema usage and appropriate function execution to `arkkan_admin` and
 `arkkan_user`. Ordinary roles have no direct application-table or private-helper
-access. Stage 4 WP2 provides Python read wrappers; Python administration wrappers
-and the CLI remain pending.
+access. Stage 4 WP2 provides Python read wrappers, and WP3 adds resource/type
+administration wrappers. Python lifecycle/deletion wrappers and the CLI remain
+pending.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -362,15 +363,21 @@ read functions from `arkkan`, implemented in `src/arkkan/_read.py`. An internal
 sentinel distinguishes omitted arguments from explicit nulls. Wrappers reject
 unsupported Python types and mode-without-version calls locally; PostgreSQL
 retains value validation, authorization and retrieval policy. See the
-[Python API reference](../README.md#python-api-reference) for usage. Administration
-wrappers and the CLI remain pending.
+[Python API reference](../README.md#python-api-reference) for usage. WP3 adds five
+administration functions in `src/arkkan/_write.py`, exported from `arkkan`.
+Metadata changes use Psycopg's JSONB adapter with a copy of the caller's dictionary;
+omitted keys and explicit null values remain distinct. Python checks types;
+PostgreSQL validates keys, resource/type rules, permissions and state policies.
+Lifecycle/deletion wrappers and the CLI remain pending.
 
 The WP1 tests in `tests/unit/test_api.py` use driver doubles. They cover cleanup,
 error translation, response validation and configuration without connecting to
 PostgreSQL. Real Python-to-PostgreSQL integration remains a Stage 4 acceptance
 requirement; these unit tests do not establish it. WP2 adds `tests/unit/test_read.py`
 for public exports, exact argument routing, response preservation and malformed
-calls. Both suites run without PostgreSQL.
+calls. WP3 adds `tests/unit/test_write.py` for administration argument routing,
+defaults, JSONB serialization, dictionary preservation and invalid inputs. These
+suites run without PostgreSQL.
 
 Run unit tests in development or staging without starting PostgreSQL:
 

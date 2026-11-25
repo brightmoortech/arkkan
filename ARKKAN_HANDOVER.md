@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-25
 
-**Resume point:** Stage 4 WP2 implemented and unit-tested; stop before WP3
+**Resume point:** Stage 4 WP3 implemented and unit-tested; stop before WP4
 
 **Audience:** A new development chat continuing the existing project.
 
@@ -38,7 +38,8 @@ The owner subsequently authorized Stage 4, with **one work package at a time
 to manage credits**. WP1 implements the private Python execution boundary in
 `src/arkkan/_api.py`: parameterized SQL, per-call runtime configuration,
 transaction/connection cleanup, decoded response validation and safe error
-translation. WP2 adds the four public read wrappers. WP3 requires the owner's
+translation. WP2 adds four public read wrappers; WP3 adds five resource/type
+administration wrappers. WP4 requires the owner's
 next instruction; Stage 5 is not authorized. No dependencies have been added.
 
 ### Stage 4 work packages and progress
@@ -50,16 +51,30 @@ does not constitute Stage 4 acceptance.
 | Package | Planned deliverable | Current status | Evidence / remaining validation |
 |---|---|---|---|
 | WP1 — API foundation | Shared parameterized SQL execution, runtime configuration, transaction/connection handling, decoded JSON responses and safe errors | Complete for WP1 scope | Commit `adfa9d5`; 311 unit tests passed, including 39 new cases; two source audits completed. Real database validation remains pending in WP5. |
-| WP2 — Read operations | Content retrieval in all three call forms, type-based listing, default-version lookup and resource information; public exports and focused tests | Complete for WP2 scope | 391 unit tests passed, including 80 new WP2 cases; two source audits completed. Locate the package commit with `git log -1 -- src/arkkan/_read.py`. Real database validation remains pending in WP5. |
-| WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Not started — next package | Await owner's instruction. |
-| WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Not started | Follows WP3. |
+| WP2 — Read operations | Content retrieval in all three call forms, type-based listing, default-version lookup and resource information; public exports and focused tests | Complete for WP2 scope | Commit `dcda13f`; 391 unit tests passed, including 80 new WP2 cases; two source audits completed. Real database validation remains pending in WP5. |
+| WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Complete for WP3 scope | 471 unit tests passed, including 80 new WP3 cases; two source audits completed. Locate the package commit with `git log -1 -- src/arkkan/_write.py`. Real database validation remains pending in WP5. |
+| WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Not started — next package | Await owner's instruction. |
 | WP5 — Integration and regression | PostgreSQL tests for every Python operation using reader/admin roles; permissions, response contracts, rollback and connection failures; cumulative prior-stage regression | Not started | Run against a committed revision in guarded staging; record actual results and resolve failures. |
 | WP6 — Documentation and handover | Final usage/development guidance, test traceability, Stage 4 execution report, registry and handover; final audits and acceptance checkpoint | Not started | Package-level documentation is maintained incrementally. `TEST_EXECUTION_PHASE1_STAGE4.md` has not yet been created; Stage 4 acceptance remains pending. |
 
-**Progress:** 2 of 6 packages complete; WP3–WP6 not started. This is a package
-count, not an estimate of effort completed. Stage 4 delivery is through local
-commits; these have not been pushed. No Stage 4 PostgreSQL integration results
+**Progress:** 3 of 6 packages complete; WP4–WP6 not started. This is a package
+count, not an estimate of effort completed. The owner requested a push before WP3;
+all checkpoints through `dcda13f` were pushed successfully to `origin/main`.
+WP3 is delivered as a local commit. No Stage 4 PostgreSQL integration results
 are available yet.
+
+WP3 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
+passed **471 tests**, including 80 new cases covering S4-017–023. Nine public
+operations are now exported. `src/arkkan/_write.py` binds text arguments and uses
+Psycopg JSONB adaptation for metadata changes, preserving omitted keys, nulls,
+empty strings and the caller's dictionary. SQL retains key, target, permission,
+immutability and state validation. No database tests were run for WP3.
+
+WP3 source reviews checked contract/default coverage, argument types, JSONB
+serialization, safe errors, policy ownership, public exports and regression risk.
+Review isolated mutable test inputs so parameterized cases cannot affect one
+another; direct JSONB objects are rejected in text argument positions. Both
+source audits are complete with no unresolved WP3 finding.
 
 WP2 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **391 tests**, including 80 new cases covering S4-010–016. The wrappers in
@@ -143,8 +158,8 @@ each received content/compliance and document-quality audits before WP6 was comm
 
 1. **Stage 3 is accepted.** The owner will wait for the CLI before further manual
    testing. No additional owner validation is a pending Stage 3 acceptance gate.
-2. **Stage 4 WP1 and WP2 are implemented; WP3 awaits the owner's instruction.**
-   Remaining packages cover administration wrappers, lifecycle
+2. **Stage 4 WP1–WP3 are implemented; WP4 awaits the owner's instruction.**
+   Remaining packages cover lifecycle/deletion
    wrappers, integration/regression, and final documentation/acceptance.
    Stage 4 authorization does not authorize Stage 5.
 3. **No unresolved Stage 3 defect is recorded.** S3-KI-001 through S3-KI-010 are
@@ -248,9 +263,9 @@ Read this handover and governing sources; inspect Git status, recent commits and
 the staging checkout without disturbing an active validation run. Preserve newer
 owner changes. Review any supplied validation results and resolve confirmed issues
 within the authorized scope. Stage 3 acceptance is already recorded; do not ask
-the owner to accept it again. Stop after Stage 4 WP2 until instructed to start WP3.
+the owner to accept it again. Stop after Stage 4 WP3 until instructed to start WP4.
 
-On the next instruction, implement WP3 administration wrappers and tests using the
+On the next instruction, implement WP4 lifecycle/deletion wrappers and tests using the
 WP1 execution boundary. Continue one package at a time, committing each completed
 package and stopping for the owner's next instruction.
 Use the existing SQL API and configuration infrastructure; do not invent extra public

@@ -11,9 +11,10 @@ assemble prompts.
 November 24, 2026. Stage 3 implements all 16 PostgreSQL API operations and their
 role permissions and was accepted on November 25, 2026. See the
 [Stage 3 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) for validation
-evidence. Stage 4 is in progress: the Python API foundation and four read
-functions are implemented and unit-tested. Python administration functions,
-Stage 4 PostgreSQL integration validation, and the CLI remain pending.
+evidence. Stage 4 is in progress: the Python API foundation, four read functions
+and five resource/type administration functions are implemented and unit-tested.
+Python lifecycle/deletion functions, Stage 4 PostgreSQL integration validation,
+and the CLI remain pending.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -70,6 +71,34 @@ including resources with no versions. See the technical requirements for full
 response payloads and PostgreSQL selection policies. Actual database integration
 validation of these Python wrappers is pending; the examples are usage guidance,
 not recorded database test results.
+
+Resource and resource-type administration functions are also exported from
+`arkkan` and require `arkkan_admin` permissions, enforced by PostgreSQL:
+
+```python
+from arkkan import (
+    add_resource, update_resource,
+    add_resource_type, update_resource_type, delete_resource_type,
+)
+
+response = add_resource("example", "v1", type_slug="task", content="Prompt text")
+response = update_resource("example", {"description": None})
+response = update_resource("example", {"version_info": "Revised"}, version="v1")
+```
+
+`add_resource` defaults to empty content and the `disabled` state. Supply a type
+for a new resource; PostgreSQL validates existing resources and type matching.
+`update_resource` takes a dictionary of string keys and string/null values:
+omitted fields remain unchanged, `None` clears a field, and `""` stores an empty
+string. Supply `version` when changing `version_info`; PostgreSQL rejects unknown
+keys, empty changes and invalid version combinations. The caller's dictionary is
+not modified. `add_resource_type(slug, description=None)` creates a custom type;
+`update_resource_type(slug, description)` sets or clears its description;
+`delete_resource_type(slug)` requests deletion of an unused custom type.
+
+These functions use the same configuration and response/error conventions as
+reads. They call the existing SQL API; protected-type, immutability and lifecycle
+rules are enforced there. Their PostgreSQL integration validation is pending.
 
 ## Examples
 
