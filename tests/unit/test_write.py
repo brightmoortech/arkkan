@@ -23,11 +23,11 @@ def call(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 
 def test_s4_017_public_exports() -> None:
-    assert set(arkkan.__all__) == set(_WRITE_NAMES) | {
+    assert set(_WRITE_NAMES) | {
         "get_resource_content", "get_resource_info",
         "get_resource_version_default", "list_resources_matching_type",
-    }
-    assert len(arkkan.__all__) == 9
+    } <= set(arkkan.__all__)
+    assert len(arkkan.__all__) == len(set(arkkan.__all__))
     for name in _WRITE_NAMES:
         assert callable(getattr(arkkan, name))
         assert getattr(arkkan, name).__doc__

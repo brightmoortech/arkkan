@@ -97,3 +97,81 @@ def delete_resource_type(slug: str) -> dict[str, Any]:
     signatures raise TypeError.
     """
     return _write_call("delete_resource_type", (slug,))
+
+
+def delete_resource_version(slug: str, version: str) -> dict[str, Any]:
+    """Delete one obsolete version, preserving its resource; return common JSON.
+
+    PostgreSQL checks slug/version and deletion eligibility. Invalid inputs,
+    denied access and database failures return errors; malformed calls raise TypeError.
+    """
+    return _write_call("delete_resource_version", (slug, version))
+
+
+def delete_resource_version_all(slug: str) -> dict[str, Any]:
+    """Delete a resource's obsolete versions; return common JSON with a count.
+
+    PostgreSQL preserves the definition and permits zero deletions. Invalid
+    inputs, denied access and database failures return errors; malformed calls
+    raise TypeError.
+    """
+    return _write_call("delete_resource_version_all", (slug,))
+
+
+def clean_up() -> dict[str, Any]:
+    """Delete all obsolete versions atomically, preserving resource definitions.
+
+    Return common JSON with a deletion count, including zero. Denied access and
+    database failures return errors; malformed calls raise TypeError.
+    """
+    return _call("clean_up", ())
+
+
+def delete_resource(slug: str) -> dict[str, Any]:
+    """Delete an empty or entirely obsolete resource; return common JSON.
+
+    PostgreSQL enforces eligibility and preserves the type. Invalid inputs,
+    denied access and database failures return errors; malformed calls raise TypeError.
+    """
+    return _write_call("delete_resource", (slug,))
+
+
+def set_resource_state(
+    slug: str, version: str, target_state: str, force: bool = False,
+) -> dict[str, Any]:
+    """Change one version's state; return common JSON.
+
+    force permits removing a default without replacement, not other invalid
+    transitions. PostgreSQL enforces policy. Invalid inputs, denied access and
+    database failures return errors; malformed calls raise TypeError.
+    """
+    operation = "set_resource_state"
+    if not _text_values_valid((slug, version, target_state)):
+        return _error_response(operation, "Text arguments must be strings or null.")
+    if force is not None and not isinstance(force, bool):
+        return _error_response(operation, "Force must be a boolean or null.")
+    return _call(operation, (slug, version, target_state, force))
+
+
+def set_resource_state_all(slug: str, target_state: str) -> dict[str, Any]:
+    """Change all versions to target_state atomically; return common JSON.
+
+    PostgreSQL validates every transition and default policy; there is no force
+    option. Invalid inputs, denied access and database failures return errors;
+    malformed calls raise TypeError. Empty resources may return a zero count.
+    """
+    return _write_call("set_resource_state_all", (slug, target_state))
+
+
+def set_resource_state_all_with_guard(
+    slug: str, source_state: str, target_state: str,
+) -> dict[str, Any]:
+    """Change versions matching source_state atomically; return common JSON.
+
+    PostgreSQL validates transitions and default policy; there is no force
+    option. Invalid inputs, denied access and database failures return errors;
+    malformed calls raise TypeError. No matching versions may return a zero count.
+    """
+    return _write_call(
+        "set_resource_state_all_with_guard", (slug, source_state, target_state),
+    )

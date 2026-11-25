@@ -347,10 +347,26 @@ database integration and the cumulative stage acceptance gate remain pending.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
-| S4-017 | Python Interface; public exports | `test_s4_017_public_exports`: exactly nine documented public operations are exported after WP3, including all five administration wrappers. |
+| S4-017 | Python Interface; public exports | `test_s4_017_public_exports`: the nine WP3 operations remain exported with no duplicates and all five administration wrappers are documented; S4-024 checks the complete export set. |
 | S4-018 | Admin API / Write Operations; literal values and defaults | `test_s4_018_write_mapping`: route positional/named arguments unchanged; preserve optional nulls, empty content, disabled default, protected-type targets and invalid state values for SQL validation. |
 | S4-019 | update_resource; omitted versus null metadata | `test_s4_019_json_changes`: serialize exact JSONB keys/values, distinguish SQL NULL from JSON null fields, preserve empty strings, copy the caller's dictionary, and forward version combinations/unknown keys to SQL without implementing policy. |
 | S4-020 | Python input validation; safe errors | `test_s4_020_invalid_changes`: reject non-object changes, non-string keys and non-string/non-null values without execution or disclosure. |
 | S4-021 | Python input validation | `test_s4_021_invalid_text_arguments`: reject invalid types in every text argument position, including attempts to pass JSONB adapters directly, without execution. |
 | S4-022 | Common API Contracts / Response JSON | `test_s4_022_response_passthrough`: preserve success/error dictionaries unchanged for each administration operation. |
 | S4-023 | Testing and Acceptance / malformed calls | `test_s4_023_malformed_call`: missing, excessive, unknown and duplicate Python arguments raise TypeError before execution. |
+
+
+### Work Package 4: Lifecycle and deletion wrappers
+
+Cases in `tests/unit/test_lifecycle.py` use a double for the execution boundary.
+They verify Python contracts only; PostgreSQL policy enforcement, permissions,
+transactions and cumulative integration validation remain scheduled for WP5.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S4-024 | Python Interface; public exports | `test_s4_024_complete_exports`: exactly all 16 specified operations are exported, callable and documented. |
+| S4-025 | Admin API / Delete and State Operations | `test_s4_025_mapping`: route all seven operations with exact positional/keyword arguments, default false force, literal Unicode/SQL-like text, blanks, nulls and invalid states for SQL validation. |
+| S4-026 | set_resource_state / force | `test_s4_026_force_mapping`: preserve explicit false, true and SQL NULL using positional and keyword calls. |
+| S4-027 | Python input validation; safe errors | `test_s4_027_invalid_types`: reject booleans and other non-text values in every text position, and non-boolean/non-null force values, without execution or exposing input. |
+| S4-028 | Common API Contracts / Response JSON | `test_s4_028_response_passthrough`: preserve success/error envelopes, zero counts and state payloads unchanged for every operation. |
+| S4-029 | Python call contracts | `test_s4_029_malformed_calls`: reject excessive/unknown arguments, missing/duplicate required arguments and force on bulk operations with TypeError before execution. |

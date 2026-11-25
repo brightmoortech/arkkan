@@ -11,10 +11,9 @@ assemble prompts.
 November 24, 2026. Stage 3 implements all 16 PostgreSQL API operations and their
 role permissions and was accepted on November 25, 2026. See the
 [Stage 3 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) for validation
-evidence. Stage 4 is in progress: the Python API foundation, four read functions
-and five resource/type administration functions are implemented and unit-tested.
-Python lifecycle/deletion functions, Stage 4 PostgreSQL integration validation,
-and the CLI remain pending.
+evidence. Stage 4 is in progress: all 16 Python API functions are implemented
+and unit-tested. Stage 4 PostgreSQL integration validation and the CLI remain
+pending.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -99,6 +98,25 @@ not modified. `add_resource_type(slug, description=None)` creates a custom type;
 These functions use the same configuration and response/error conventions as
 reads. They call the existing SQL API; protected-type, immutability and lifecycle
 rules are enforced there. Their PostgreSQL integration validation is pending.
+
+Lifecycle and deletion functions use the same response conventions and require
+`arkkan_admin` permissions:
+
+| Function | Purpose |
+|---|---|
+| `set_resource_state(slug, version, target_state, force=False)` | Change one version; force permits default removal without replacement only. |
+| `set_resource_state_all(slug, target_state)` | Change every version atomically, subject to transition and default policies. |
+| `set_resource_state_all_with_guard(slug, source_state, target_state)` | Change versions matching the source state atomically. |
+| `delete_resource_version(slug, version)` | Delete one obsolete version, keeping its resource. |
+| `delete_resource_version_all(slug)` | Delete a resource's obsolete versions, keeping its definition. |
+| `clean_up()` | Delete obsolete versions across all resources, keeping definitions. |
+| `delete_resource(slug)` | Delete a resource only if empty or all its versions are obsolete. |
+
+Import these functions from `arkkan`. Bulk state changes have no force option.
+Supply an actual boolean for `force`, not a string or integer. Explicit `None`
+is passed as SQL NULL and rejected by PostgreSQL. PostgreSQL enforces lifecycle,
+default-preservation and deletion rules; these wrappers do not duplicate them.
+Their actual PostgreSQL integration validation remains pending in WP5.
 
 ## Examples
 

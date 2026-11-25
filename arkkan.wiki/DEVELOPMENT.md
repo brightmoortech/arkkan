@@ -179,7 +179,8 @@ Migrations 013–036 add private helpers and public functions; migration 037
 grants schema usage and appropriate function execution to `arkkan_admin` and
 `arkkan_user`. Ordinary roles have no direct application-table or private-helper
 access. Stage 4 WP2 provides Python read wrappers, and WP3 adds resource/type
-administration wrappers. Python lifecycle/deletion wrappers and the CLI remain
+administration wrappers. WP4 completes the Python API with lifecycle/deletion
+wrappers. PostgreSQL integration validation of the Python API and the CLI remain
 pending.
 
 The cumulative inventory is 37 migrations. See the
@@ -368,7 +369,10 @@ administration functions in `src/arkkan/_write.py`, exported from `arkkan`.
 Metadata changes use Psycopg's JSONB adapter with a copy of the caller's dictionary;
 omitted keys and explicit null values remain distinct. Python checks types;
 PostgreSQL validates keys, resource/type rules, permissions and state policies.
-Lifecycle/deletion wrappers and the CLI remain pending.
+WP4 adds the seven lifecycle/deletion wrappers in the same module, completing
+all 16 public operations. Text arguments remain literal; the single-version
+force option accepts booleans or SQL NULL, with null rejected by SQL. Bulk
+operations have no force option. The CLI remains pending.
 
 The WP1 tests in `tests/unit/test_api.py` use driver doubles. They cover cleanup,
 error translation, response validation and configuration without connecting to
@@ -377,7 +381,9 @@ requirement; these unit tests do not establish it. WP2 adds `tests/unit/test_rea
 for public exports, exact argument routing, response preservation and malformed
 calls. WP3 adds `tests/unit/test_write.py` for administration argument routing,
 defaults, JSONB serialization, dictionary preservation and invalid inputs. These
-suites run without PostgreSQL.
+suites run without PostgreSQL. WP4 adds `tests/unit/test_lifecycle.py` for the
+complete export set, lifecycle/deletion routing, strict force typing, safe type
+errors, response preservation and malformed calls. It also runs without PostgreSQL.
 
 Run unit tests in development or staging without starting PostgreSQL:
 
