@@ -180,8 +180,9 @@ grants schema usage and appropriate function execution to `arkkan_admin` and
 `arkkan_user`. Ordinary roles have no direct application-table or private-helper
 access. No Python resource API or CLI is available yet.
 
-The cumulative inventory is 37 migrations. PostgreSQL validation remains
-pending the consolidated Stage 3 staging run. Use the provisioned development
+The cumulative inventory is 37 migrations. See the
+[Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
+checkpoint, results and acceptance status. Use the provisioned development
 instance for manual initialization and staging for automated database tests.
 
 From the configured development checkout, with the environment verified by
@@ -385,8 +386,8 @@ Application initialization integration tests reset only the known application
 objects and roles in the verified staging instance; do not use staging for
 data that must be retained. Resets preserve the independent environment
 identity and persistent storage, and reject unexpected dependencies rather
-than using cascading drops. Public API tests are added in their authorized
-stage.
+than using cascading drops. Stage 3 tests cover the public SQL API, lifecycle
+rules, concurrency, rollback and role permissions.
 
 ## Project Documentation
 

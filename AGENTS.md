@@ -15,6 +15,7 @@ Paths are relative to the repository root. The registry identifies each document
 | [TEST_SPECIFICATION.md](arkkan.wiki/TEST_SPECIFICATION.md) | Test case definitions and traceability to requirements and acceptance criteria. |
 | [TEST_EXECUTION_PHASE1_STAGE1.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE1.md) | Recorded test execution evidence for Phase 1, Stage 1; not a requirements source. |
 | [TEST_EXECUTION_PHASE1_STAGE2.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE2.md) | Recorded test execution evidence and closeout status for Phase 1, Stage 2; not a requirements source. |
+| [TEST_EXECUTION_PHASE1_STAGE3.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) | Recorded test execution evidence, review findings and closeout status for Phase 1, Stage 3; not a requirements source. |
 | [DOCUMENT_GOVERNANCE.md](arkkan.wiki/DOCUMENT_GOVERNANCE.md) | Governs authorized document creation, modification, review, auditing, and delivery. |
 | [BACKLOG.md](arkkan.wiki/BACKLOG.md) | Deferred improvements and proposed outcomes; update when items are identified, approved, deferred, or validated. Not a source of implementation authorization. |
 | [AGENTS.md](AGENTS.md) | Repository documentation registry, reading guidance, and maintenance triggers. |

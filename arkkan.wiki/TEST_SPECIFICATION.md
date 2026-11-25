@@ -181,6 +181,11 @@ the automated suite. Container recreation does not establish recovery success.
 
 ## Phase 1, Stage 3: PostgreSQL API
 
+The complete inventory is 37 migrations. Work-package counts below describe
+their cumulative implementation checkpoints. Actual outcomes, the tested
+revision and acceptance status are recorded in the
+[Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md).
+
 ### Work Package 1: API foundation
 
 The Stage 2 initialization regressions remain applicable. WP1 introduced
@@ -204,24 +209,23 @@ The new unit case is in `tests/unit/test_initialization.py`.
 | S3-007 | Initialization / Reruns and failures; Data Lifecycle | `test_s3_007_upgrade_preserves_stage2_database`: initialize the Stage 2 foundation, populate test records, dry-run and apply the pending API migrations, verify existing object identifiers and data remain intact, and verify an idempotent rerun. |
 
 These tests do not establish the public operation contracts, lifecycle policy,
-concurrency behavior or public API authorization. Those tests will be added with
-the respective implementations. Public API tests must verify the exact operation
+concurrency behavior or public API authorization. Those tests appear in the
+following work packages. Public API tests verify the exact operation
 name, response fields and operation-specific data or error behavior.
 
 
 ### Work Package 2: Resource and type writes
 
 Migrations 017–021 add the five specified write operations. The cumulative
-initialization inventory is 21 migrations. WP2 keeps function and schema access
-restricted to the deployment owner; permanent runtime grants remain WP5 scope.
+initialization inventory at WP2 is 21 migrations. That checkpoint keeps function
+and schema access restricted to the deployment owner; WP5 adds runtime grants.
 Tests use temporary grants inside rolled-back transactions to verify definer
 execution without giving runtime roles table or internal-helper access.
 
 The unit case is in `tests/unit/test_initialization.py`; the integration cases
 are in `tests/integration/test_db_initialization.py`. All database cases retain
-the staging guard, isolated setup and restrictive cleanup. Integration tests
-are collected during WP2 development but execution and acceptance remain
-pending the consolidated Stage 3 staging validation. Collection is not a pass.
+the staging guard, isolated setup and restrictive cleanup. Execution outcomes
+are recorded separately in the Stage 3 execution report. Collection is not a pass.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -236,12 +240,13 @@ pending the consolidated Stage 3 staging validation. Collection is not a pass.
 | S3-016 | Shared validation; update_resource | `test_s3_016_invalid_updates_are_atomic`: reject null/non-object/empty changes, unknown or immutable keys, non-string/non-null values, invalid identifiers, invalid version combinations and missing targets; mixed invalid updates leave every row unchanged. |
 | S3-017 | Security; API boundaries; intermediate checkpoint safety | `test_s3_017_write_functions_restricted`: both runtime roles lack WP2 execution privileges, even with temporary schema usage; temporary admin grants permit all five operations through SECURITY DEFINER without direct table/helper grants. Permanent role authorization is validated in WP5. |
 | S3-018 | Initialization / conflicting-object failures; Security | `test_s3_018_write_function_conflict`: check and apply reject changed security mode/search path, PUBLIC execute grants and conflicting overloads without replacing existing objects. |
-| S3-019 | Initialization / idempotency; data preservation | `test_s3_019_upgrade_preserves_wp1`: initialize WP1, retain populated records and existing object identifiers through read-only planning and five-step upgrade, and verify an unchanged rerun. |
+| S3-019 | Initialization / idempotency; data preservation | `test_s3_019_upgrade_preserves_wp1`: initialize WP1, retain populated records and existing object identifiers through read-only planning and upgrade to the complete migration set, and verify an unchanged rerun. |
 | S3-020 | Common API Contracts / concurrency and atomicity | `test_s3_020_concurrent_writes`: concurrent new/existing default creation keeps exactly one default; duplicate versions and competing immutable types produce one success; type deletion and resource creation cannot create an orphan; disjoint metadata updates both survive. |
 | S3-021 | Common API Contracts / serialized resource writes | `test_s3_021_resource_writes_wait_for_lock`: hold a resource row lock and observe every resource mutation, including cleanup, blocked by that backend before releasing the lock and verifying success; avoids relying only on simultaneous thread scheduling. |
 
 The shared WP2 call helper checks exact operation names, response keys, result
-values and object payloads or nonblank error reasons for every completed call.
+values and operation-specific object/array payloads or nonblank error reasons
+for every completed call.
 Catalog unit checks do not establish PostgreSQL syntax, catalog representation,
 locking behavior or database acceptance. Required staging execution covers the
 entire applicable suite, including the earlier-stage regressions.
@@ -253,8 +258,8 @@ Migrations 022–027 implement four read operations, including three explicit
 `get_resource_content` signatures. Omitted version selects the default;
 explicit null/blank version is rejected. All read functions use a single
 statement snapshot and return content only through `get_resource_content`.
-The following guarded integration tests remain pending consolidated staging
-execution. The cumulative migration inventory is 27.
+The following integration tests use the staging guard. The cumulative migration
+inventory at WP3 is 27.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -267,8 +272,7 @@ execution. The cumulative migration inventory is 27.
 Migrations 028–036 add private transition/bulk-state helpers and the seven
 lifecycle operations. Resource mutations lock the parent definition; cleanup
 locks parents in UUID order. Bulk selection membership is captured before
-changing defaults. The cumulative inventory is 36 migrations. Database tests
-remain pending consolidated staging execution.
+changing defaults. The cumulative inventory at WP4 is 36 migrations.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -286,7 +290,7 @@ Catalog checks reject excess or grantable privileges; missing authorized grants
 are pending work. The cumulative inventory is 37 migrations and 18 public SQL
 signatures for the 16 operations. S3-017 explicitly initializes the WP2 subset
 to retain verification of that intermediate checkpoint. S3-004 also covers
-both private state helpers. Database execution remains pending staging.
+both private state helpers.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
