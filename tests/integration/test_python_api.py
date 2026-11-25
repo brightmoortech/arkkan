@@ -39,7 +39,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Callable[..
                 entries.append(":".join(value.replace("\\", "\\\\").replace(":", "\\:")
                                         for value in fields))
         # Create protected from the outset; never alter operator credential files.
-        descriptor = password_file.open("x", opener=lambda path, flags: os.open(
+        descriptor = open(password_file, "x", opener=lambda path, flags: os.open(
             path, flags, 0o600))
         with descriptor:
             descriptor.write("\n".join(entries) + "\n")
@@ -55,7 +55,8 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Callable[..
             }
             assert kwargs["user"] in {"arkkan_admin", "arkkan_user"}
             with _staging_connection(_ROOT):
-                result = psycopg.connect(**kwargs)
+                pass
+            result = psycopg.connect(**kwargs)
             connections.append(result)
             return result
 
