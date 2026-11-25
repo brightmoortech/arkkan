@@ -11,7 +11,7 @@ expanded cases.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
-| S1-001 | Phase 1 Implementation Strategy: package installs in a clean environment | `tests/unit/test_import.py::test_s1_001_package_import`: package imports; no premature public API exports. Run after clean bootstrap for installation evidence. |
+| S1-001 | Phase 1 Implementation Strategy: package installs in a clean environment | `tests/unit/test_import.py::test_s1_001_package_import`: package imports. Stage 4 checks public exports separately in S4-010. Run after clean bootstrap for installation evidence. |
 | S1-002 | Initialization / Prerequisites and configuration; CLI / Installation and database access | `test_s1_002_required_settings`: valid PGDATABASE and PGUSER are accepted. |
 | S1-003 | Same configuration requirements; Stage 1 configuration validation | `test_s1_003_required_validation`: each required setting is rejected when missing, empty or whitespace-only; error identifies the variable. |
 | S1-004 | Initialization / Prerequisites and configuration; CLI / Installation and database access | `test_s1_004_optional_settings`: optional PGHOST, PGPORT and PGPASSFILE are preserved; omitted settings are not added (also covered by S1-002). Actual libpq default resolution is not tested at Stage 1. |
@@ -320,3 +320,20 @@ requires all operation/error integration cases and prior-stage regression tests.
 | S4-007 | Python Interface / connection lifecycle | `test_s4_007_unexpected_failure_closes`: interruptions and unexpected programming failures propagate after closing the connection; no commit is attempted. Closing an uncommitted connection abandons its transaction. |
 | S4-008 | Data Architecture / runtime configuration | `test_s4_008_configuration_per_call`: reread settings on each call and map environment names to libpq connection options, including the external password-file path. |
 | S4-009 | Python Interface / failure cleanup | `test_s4_009_rollback_failure_closes`: rollback failure after SQL rejection or commit failure still closes, exposes no raw diagnostics and does not retry rollback. |
+
+### Work Package 2: Read wrappers
+
+Cases in `tests/unit/test_read.py` exercise the four exported functions with a
+double for the shared execution boundary. They verify Python routing and local
+validation, not PostgreSQL selection, permissions or transaction behavior.
+Those database checks remain required for Stage 4 integration validation.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S4-010 | Python Interface; Coding Conventions / public exports | `test_s4_010_public_exports`: exactly the four implemented read functions are exported and documented. |
+| S4-011 | Read Operations; literal identifiers; SQL NULL mapping | `test_s4_011_read_mapping`: positional and named identifiers route to the matching operation unchanged, including Unicode, SQL-like text, blank strings and explicit null for SQL validation. |
+| S4-012 | get_resource_content / three call forms and modes | `test_s4_012_content_call_forms`: distinguish omitted version/mode from explicit null; route one, two or three parameters and forward all retrieval modes without implementing selection policy. |
+| S4-013 | get_resource_content / call contract | `test_s4_013_mode_requires_version`: mode without version returns a safe error without execution, including explicit null/empty mode. |
+| S4-014 | Testing and Acceptance / Python input validation | `test_s4_014_invalid_python_types`: reject booleans, numbers, bytes and containers in identifier/version/mode positions without execution or exposing supplied values. |
+| S4-015 | Common API Contracts / decoded response | `test_s4_015_response_passthrough`: preserve success/error envelopes, selected content version, empty content/list, optional null metadata and empty version lists. |
+| S4-016 | Testing and Acceptance / malformed calls | `test_s4_016_malformed_call`: missing, excessive, unknown and duplicate Python arguments raise TypeError before execution. |
