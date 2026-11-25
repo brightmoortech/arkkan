@@ -41,6 +41,25 @@ transaction/connection cleanup, decoded response validation and safe error
 translation. It adds no public wrappers or dependencies. WP2 requires the owner's
 next instruction; Stage 5 is not authorized.
 
+### Stage 4 work packages and progress
+
+This is the agreed execution plan for the Python API stage. Complete and commit
+one package, then stop for the owner's next instruction. Package completion
+does not constitute Stage 4 acceptance.
+
+| Package | Planned deliverable | Current status | Evidence / remaining validation |
+|---|---|---|---|
+| WP1 — API foundation | Shared parameterized SQL execution, runtime configuration, transaction/connection handling, decoded JSON responses and safe errors | Complete for WP1 scope | Commit `adfa9d5`; 311 unit tests passed, including 39 new cases; two source audits completed. Real database validation remains pending in WP5. |
+| WP2 — Read operations | Content retrieval in all three call forms, type-based listing, default-version lookup and resource information; public exports and focused tests | Not started — next package | Await owner's instruction. |
+| WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Not started | Follows WP2. |
+| WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Not started | Follows WP3. |
+| WP5 — Integration and regression | PostgreSQL tests for every Python operation using reader/admin roles; permissions, response contracts, rollback and connection failures; cumulative prior-stage regression | Not started | Run against a committed revision in guarded staging; record actual results and resolve failures. |
+| WP6 — Documentation and handover | Final usage/development guidance, test traceability, Stage 4 execution report, registry and handover; final audits and acceptance checkpoint | Not started | Package-level documentation is maintained incrementally. `TEST_EXECUTION_PHASE1_STAGE4.md` has not yet been created; Stage 4 acceptance remains pending. |
+
+**Progress:** 1 of 6 packages complete; WP2–WP6 not started. This is a package
+count, not an estimate of effort completed. WP1 is committed locally and has
+not been pushed. No Stage 4 PostgreSQL integration results are available yet.
+
 WP1 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **311 tests**, including 39 new cases covering S4-001–009. No database
 tests were run for WP1; actual PostgreSQL integration and the cumulative full
