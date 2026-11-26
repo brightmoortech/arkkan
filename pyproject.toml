@@ -11,6 +11,9 @@ dependencies = [
     "typing-extensions==4.16.0; python_version < '3.13'",
 ]
 
+[project.scripts]
+arkkan = "arkkan._cli:_main"
+
 [project.optional-dependencies]
 test = [
     "pytest==9.1.1",
