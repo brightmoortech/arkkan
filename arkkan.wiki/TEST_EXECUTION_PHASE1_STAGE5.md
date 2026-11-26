@@ -2,10 +2,10 @@
 
 ## Phase 1, Stage 5: CLI
 
-**Status:** In progress; WP1–WP5 complete; WP6 pending. This report accumulates
-actual evidence and will be finalized at Stage 5 closeout. Stage 4 acceptance
-is deferred until the owner can test through the CLI. The owner explicitly
-authorized Stage 5; no owner acceptance or manual test results are claimed.
+**Status:** WP1–WP6 complete; ready for owner acceptance. This is the final
+Stage 5 execution report. Stage 4 acceptance is deferred until owner CLI testing.
+The owner explicitly authorized Stage 5; no owner acceptance or manual test
+results are claimed.
 
 ## 1. Work packages
 
@@ -16,7 +16,7 @@ authorized Stage 5; no owner acceptance or manual test results are claimed.
 | WP3 | Lifecycle/deletion commands; all 16 command mappings | Complete; checkpoint `dd0bff2` |
 | WP4 | Real PostgreSQL CLI workflows, role authorization and password-file authentication | Complete; checkpoint `a226b9e` |
 | WP5 | Cumulative regression, corrections and verification | Complete; tested checkpoint `44a10aa` |
-| WP6 | Final usage documentation, report, audits and handover | Pending |
+| WP6 | Final usage documentation, report, audits and handover | Complete |
 
 ## 2. WP1 execution evidence
 
@@ -255,9 +255,10 @@ Supplementary JUnit files may be removed by host cleanup. SHA-256:
 
 **1,021 passed in 2,288.11 seconds (38 minutes 8 seconds)**; zero failures,
 errors or skips. JUnit confirms 931 unit, 85 integration and five e2e cases,
-covering all 170 specified identifiers. This is one complete successful run
-at the stated revision, including container persistence, initialization,
-SQL policy/concurrency, Python API and real CLI workflows.
+covering all 170 specified identifiers. These are 170 test functions expanded
+by parameterization into 1,021 executions, not 1,021 function definitions.
+This is one complete successful run at the stated revision, including container
+persistence, initialization, SQL policy/concurrency, Python API and real CLI workflows.
 
 S2-030 container recreation passed; the earlier Stage 4 port conflict did not
 recur in this run. This observation does not establish its original cause.
@@ -289,14 +290,47 @@ status were rechecked after execution, and baseline diffs preserve unrelated
 content. Test definitions and development commands remain unchanged, so their
 documents need no WP5 edit.
 
-## 8. Remaining validation and limitations
+## 8. WP6 documentation closeout
+
+WP6 changes only README, DEVELOPMENT, AGENTS, ARKKAN_HANDOVER and this report.
+The CLI reference now includes an owner walkthrough for target selection,
+initialization prerequisites, credentials, creation/reads, metadata clearing,
+reader denial, local rejection and scoped cleanup. DEVELOPMENT provides the
+cumulative staging recipe and explains the 170 functions / 1,021 executions.
+The registry and handover identify final status and the pending owner decisions.
+No new automated test result is claimed; WP5 remains the cumulative evidence.
+The tested implementation, tests, SQL, dependencies and configuration are unchanged.
+
+Both documentation audit passes read all five changed files in full. Pass 1
+compared CLI and initialization requirements, functional lifecycle policies,
+TESTING, CLI/API source, the test specification, Git checkpoints and WP5 JUnit
+evidence. It corrected stale progress/push status and removed a draft reference
+to a specific initialization diagnostic that the API does not provide. Pass 2
+checked reader flow, shell context, command syntax, links, terminology and
+cross-document acceptance status; it clarified the repository-root prerequisite
+and report wording. Corrections were reread and baseline diffs preserve historical
+results, unrelated content and owner decisions. No material finding remains.
+These were distinct passes by the coding assistant, not separate reviewers.
+
+WP6 verification on 2026-11-26: the documented `--collect-only -q` command
+collected 1,021 tests; an AST inventory confirmed 118/47/5 test functions in
+12/3/1 unit/integration/e2e files. Installed `resource state --help` succeeded.
+Local Markdown paths and heading anchors and `git diff --check` passed.
+The retained WP5 JUnit checksum and 1,021/0/0/0 test/failure/error/skip counts
+were rechecked. Git comparison against `44a10aa` found no changes to application
+source, tests, SQL, dependencies or Compose configuration. No database operations
+or manual walkthrough were executed for this documentation package; fresh-setup
+verification remains Stage 6. No new test definitions require specification edits.
+
+## 9. Remaining validation and limitations
 
 WP1–WP3 used local doubles; WP4 adds actual CLI database evidence separately.
 The existing Stage 4 integration evidence is not relabeled as CLI evidence.
 
-All command mappings and WP5 cumulative regression are complete. WP6 must
-finalize usage guidance, this report and the handover before Stage 5 closeout.
-Stage 5 is not yet presented for acceptance. Stage 6 is not authorized.
+All six work packages, command mappings and cumulative regression are complete.
+Stage 5 is ready for owner acceptance; Stage 4 acceptance remains deferred until
+owner CLI validation. No owner results or acceptance are inferred. Stage 6
+fresh-setup and complete Phase 1 validation remain separate, unauthorized work.
 WP4/WP5 reset staging application fixtures;
 development database contents were not changed. Linux execution and owner manual
 validation are not established by these macOS tests.

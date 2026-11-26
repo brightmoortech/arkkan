@@ -512,6 +512,41 @@ manual validation. Cumulative regression requires unit, integration and e2e suit
 Track package progress and actual results in the
 [Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 
+### Stage 5 cumulative validation
+
+Stage 5 WP1–WP6 are complete and ready for owner acceptance. The final
+[Stage 5 report](TEST_EXECUTION_PHASE1_STAGE5.md) records the successful cumulative
+run at `44a10aa`; later WP5/WP6 documentation does not change the tested code.
+
+The current suite contains **170 test functions in 16 files**, expanded by
+`pytest.mark.parametrize` into **1,021 executions**: 118 unit functions yield
+931 executions, 47 integration functions yield 85, and five e2e functions yield
+five. Parameter combinations are individual executions, not separate function
+definitions. To list them without running database operations:
+
+```bash
+.venv/bin/python -m pytest tests/unit tests/integration tests/e2e --collect-only -q
+```
+
+For a repeat run, use a clean staging checkout at the chosen committed revision
+as described under Staging validation. Refresh its executable, verify the
+environment, run all suites, and verify the environment again:
+
+```bash
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/python scripts/manage_environment.py check
+.venv/bin/python -m pytest tests/unit tests/integration tests/e2e -q --junitxml=/private/tmp/arkkan-stage5-owner-validation.xml
+.venv/bin/python scripts/manage_environment.py check
+```
+
+Run each command only after the previous one succeeds. Record the selected Git
+revision and retain the JUnit file outside the repository; choose another filename
+to preserve an earlier report. Expected inventory at the Stage 5 checkpoint is
+1,021 passed with no failures, errors or skips. This recipe is not evidence that
+the owner has run it. Tests reset application objects and roles; they do not
+leave staging initialized for manual CLI use. Use the development instance and
+[manual walkthrough](../README.md#manual-cli-validation) for owner testing.
+
 ## Project Documentation
 
 - [Functional Requirements](FUNCTIONAL_REQ.md)

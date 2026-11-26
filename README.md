@@ -18,7 +18,8 @@ targeted rerun, including the transient staging failure. Stage 4 acceptance is
 deferred until the owner can validate through the CLI. Stage 5 WP1–WP3 provide
 all 16 CLI operation mappings, including lifecycle changes and deletion. WP4
 adds real executable validation in staging. WP5 cumulative regression passed
-all 1,021 tests at `44a10aa`; Stage 5 documentation closeout remains WP6.
+all 1,021 parameterized test executions at `44a10aa`. WP6 documentation closeout
+is complete; Stage 5 is ready for owner acceptance.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -36,9 +37,8 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 
 ## CLI Reference
 
-Stage 5 is in progress. All specified commands are implemented. WP4 tests real
-CLI workflows in staging, and WP5 cumulative regression passed. Documentation
-closeout remains WP6; owner acceptance is pending.
+All 16 specified operations are implemented and validated through the CLI.
+Stage 5 WP1–WP6 are complete; owner acceptance is pending.
 
 Install or refresh the executable from the project root in the existing virtual
 environment:
@@ -128,6 +128,72 @@ arkkan type update custom --clear-description
 WP1–WP3 have local unit coverage; WP1 also verifies executable installation.
 WP4 exercises real CLI database workflows, permissions and password-file use;
 see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
+
+### Manual CLI validation
+
+Use the development database for owner testing. First follow
+[Application Database Initialization](arkkan.wiki/DEVELOPMENT.md#application-database-initialization):
+verify the target, review the dry run, and apply pending migrations deliberately.
+Provisioning alone creates the environment identity, not the application tables.
+Initialization creates login roles without passwords; a privileged operator must
+set their passwords separately (for example, with interactive `psql` `\password`)
+and maintain matching entries in the protected client password file. Reuse existing
+credentials when already configured. Do not use the setup superuser for CLI testing.
+
+After initialization, use a separate shell from setup commands. For the documented
+local development instance, run from the repository root and select the target
+and existing password file:
+
+```bash
+export PGHOST=localhost PGPORT=5441 PGDATABASE=arkkan_dev
+export PGUSER=arkkan_admin
+export PGPASSFILE="$HOME/.pgpass"
+source .venv/bin/activate
+arkkan resource list -t task -j
+```
+
+Adjust the password-file path to your existing file; it needs matching entries for
+both `arkkan_admin` and `arkkan_user`, with permissions `0600`. The initial list
+should succeed even when empty. Connection failures require checking the selected
+target and credentials. If authentication succeeds but API calls fail, review
+the initialization dry run and role permissions.
+
+The following walkthrough writes one resource. Choose an unused slug; these examples
+use `cli-review-example`. Run commands individually and inspect each result before
+continuing. They are suggested manual checks, not additional execution evidence.
+
+```bash
+printf '%s\n' 'Example prompt' | arkkan resource add cli-review-example v1 -t task -f - -s enabled_default
+arkkan resource get cli-review-example
+arkkan resource info cli-review-example -j
+arkkan resource update cli-review-example -d ''
+arkkan resource update cli-review-example --clear-description
+arkkan resource info cli-review-example -j
+PGUSER=arkkan_user arkkan resource get cli-review-example -v v1
+PGUSER=arkkan_user arkkan resource update cli-review-example -d denied
+```
+
+The reads should return the supplied content; metadata should show the description
+cleared to null. The reader update should fail with exit code 1 and leave metadata
+unchanged. Inspect `echo $?` immediately after a command to see its exit code.
+For local rejection, `arkkan resource get cli-review-example -m strict` should
+exit 2 because `-v` is missing, without connecting.
+
+To remove only this example, return to the administrator shell and run:
+
+```bash
+arkkan resource state cli-review-example -v v1 -s disabled -F
+arkkan resource state cli-review-example -v v1 -s obsolete
+arkkan resource delete-version cli-review-example -v v1
+arkkan resource info cli-review-example -j
+arkkan resource delete cli-review-example
+```
+
+The info command should show the retained definition with no versions, before the
+last command removes it. Avoid global `resource cleanup` for this walkthrough:
+it acts on obsolete versions across the database. For automated validation of
+all work packages, follow the [cumulative staging recipe](arkkan.wiki/DEVELOPMENT.md#stage-5-cumulative-validation).
+Automated tests reset staging application data and must not overlap manual testing.
 
 ## Python API Reference
 
