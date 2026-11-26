@@ -409,9 +409,9 @@ affected-test rerun separately. Owner acceptance is a separate decision.
 `tests/unit/test_cli.py` covers local parsing and presentation using public API
 doubles. Database connections are blocked. The installed executable is exercised
 from a temporary directory for help only. These 66 cases bring the unit inventory
-to 658; they do not establish real PostgreSQL CLI behavior. Administration,
-UTF-8 input files/stdin, clearing, lifecycle and authorization coverage will be
-added in subsequent packages. Actual results are in the
+to 658 at WP1; they do not establish real PostgreSQL CLI behavior. WP2 adds
+creation/update, UTF-8 input and clearing cases below. Lifecycle and real
+authorization coverage remain for subsequent packages. Actual results are in the
 [Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
@@ -424,3 +424,24 @@ added in subsequent packages. Actual results are in the
 | S5-006 | CLI / API errors and exit codes | `test_s5_006_api_error_output`: every read command returns 1 for API errors; human errors use stderr, JSON errors preserve the envelope on stdout. |
 | S5-007 | CLI / Installation and database access | `test_s5_007_missing_configuration`: missing runtime settings return the API configuration error and exit 1 before connecting. |
 | S5-008 | CLI / installable executable | `test_s5_008_installed_entry_point`: installed executable runs help outside the checkout with libpq variables removed; exits 0 without stderr. |
+
+
+### Work Package 2: Creation and metadata updates
+
+`tests/unit/test_cli_write.py` adds 145 cases with public API doubles and blocked
+database connections. The cumulative unit inventory is 803 (211 CLI cases).
+Temporary files and binary-backed stdin verify input preservation; these are
+local boundary tests, not PostgreSQL write or authorization evidence.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S5-009 | CLI / resource add; literal tokens and defaults | `test_s5_009_add_defaults_and_options`: omitted type/metadata, empty content, disabled default and supplied values route unchanged; state validity remains an API/database concern. |
+| S5-010 | CLI / UTF-8 files and standard input | `test_s5_010_utf8_content`: exact empty/Unicode/BOM/CRLF/whitespace content, independent of stdin text encoding; source files and stream ownership preserved. |
+| S5-011 | CLI / local input errors | `test_s5_011_content_errors_before_api`: reject invalid UTF-8, missing files, directories and invalid paths before API calls; exit 2, stderr only, no content disclosure, including with `-j`. |
+| S5-012 | CLI / resource update and metadata clearing | `test_s5_012_metadata_changes`: all 63 nonempty combinations of omitted/set/empty/clear values produce exact keys and nulls, with version supplied only for version information. |
+| S5-013 | CLI / type add and update | `test_s5_013_type_mapping`: literal types and absent/set/empty/cleared descriptions map to their public APIs without normalization. |
+| S5-014 | CLI / invalid argument combinations | `test_s5_014_invalid_write_arguments`: reject missing values, no updates, invalid version/info combinations, conflicting setters/clearers, unknown or abbreviated options before any API call. |
+| S5-015 | CLI / help | `test_s5_015_write_help`: both help flags work for all four new commands without connecting. |
+| S5-016 | CLI / output and errors | `test_s5_016_write_output`: new commands preserve complete JSON responses and API errors; human output includes identifiers/updated fields, correct streams and exit codes. |
+| S5-017 | CLI / safe local input failures | `test_s5_017_read_failure_sanitized`: simulated file/stdin permission failures exit 2 before API calls without leaking raw diagnostics. |
+| S5-018 | CLI / reject syntax before processing | `test_s5_018_syntax_before_input`: an invalid option rejects a stdin-based creation command without consuming stdin or calling the API. |

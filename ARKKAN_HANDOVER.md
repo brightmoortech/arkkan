@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-26
 
-**Resume point:** Stage 5 WP1 complete; continue with WP2 when instructed.
+**Resume point:** Stage 5 WP1–WP2 complete; continue with WP3 when instructed.
 Stage 4 acceptance is deferred until owner CLI testing.
 
 **Audience:** A new development chat continuing the existing project.
@@ -177,13 +177,13 @@ then stop. This sequencing decision does not imply acceptance of either stage.
 | Package | Deliverable | Status |
 |---|---|---|
 | WP1 | Installable executable, parser/help, shared output/error handling, four read commands and local tests | Complete |
-| WP2 | Resource/type creation and metadata updates, UTF-8 files/stdin, metadata clearing and local tests | Pending |
+| WP2 | Resource/type creation and metadata updates, UTF-8 files/stdin, metadata clearing and local tests | Complete |
 | WP3 | Lifecycle/deletion commands and local tests; complete all 16 command mappings | Pending |
 | WP4 | Real CLI PostgreSQL tests, role authorization, password-file authentication and representative command workflows | Pending |
 | WP5 | Cumulative prior-stage and CLI regression, corrections and verification | Pending |
 | WP6 | Complete usage guidance, final Stage 5 report, audits and handover | Pending |
 
-WP1 implementation checkpoint is `0489e93` (local, not pushed).
+WP1 implementation checkpoint `0489e93` and documentation `ea94b08` are pushed.
 WP1 adds `src/arkkan/_cli.py` and the console entry point in `pyproject.toml`.
 It uses standard-library argparse and the public Python API; no SQL or dependency
 changes. Installation refresh succeeded. The final local unit run passed
@@ -193,10 +193,21 @@ review passes completed; real CLI database validation remains pending.
 See the [Stage 5 report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md) and
 [CLI usage](README.md#cli-reference). The report is progressive until closeout.
 
+WP2 implementation checkpoint is `6b591c7` (local, not pushed). It adds
+`resource add`, `resource update`, `type add` and `type update`, bringing the CLI
+to eight of 16 operation mappings. Strict UTF-8 file/stdin reads preserve newlines;
+invalid input fails before an API call. Metadata updates distinguish omitted,
+empty and cleared fields. PostgreSQL retains business policy and authorization.
+No dependencies, SQL or Python API contracts changed. Final development unit
+run: **803 passed in 1.51 seconds**, including 145 new WP2 cases. Both source
+and document audit passes completed. No database tests ran; real CLI validation
+remains WP4. WP3 must add all deletion commands, including `type delete`, and
+lifecycle commands. One package at a time remains the agreed execution boundary.
+
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
-- Remote `origin/main` was pushed through Stage 4 WP6, `b5257ca`.
+- Remote `origin/main` was pushed through Stage 5 WP1 documentation, `ea94b08`.
 - Pushed WP5 test commits are: `79105de`, `b663ad8`, and
   `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
   integration test's helper transactions. Application source, SQL and configuration
@@ -362,7 +373,7 @@ the owner to accept it again. Stage 4 is ready for owner acceptance. Review
 transient port conflict and successful rerun; do not describe it as one clean
 full-suite run at the final test revision.
 
-Continue Stage 5 with WP2 when the owner requests the next package. Stage 5 is
+Continue Stage 5 with WP3 when the owner requests the next package. Stage 5 is
 authorized; do not ask for Stage 4 acceptance before continuing CLI work. Retain
 one work package at a time unless the owner changes that preference. Use the
 public Python API; do not introduce new database operations or duplicate SQL

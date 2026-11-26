@@ -15,9 +15,9 @@ evidence. Stage 4 implements all 16 Python API functions and is ready for owner
 acceptance. The [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
 records successful coverage of all 677 tests across cumulative execution and a
 targeted rerun, including the transient staging failure. Stage 4 acceptance is
-deferred until the owner can validate through the CLI. Stage 5 WP1 provides the
-installed CLI and four read commands; administration commands and database-backed
-CLI validation remain pending.
+deferred until the owner can validate through the CLI. Stage 5 WP1–WP2 provide the
+installed CLI, four read commands, creation and metadata updates. Lifecycle/
+deletion commands and database-backed CLI validation remain pending.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -35,8 +35,8 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 
 ## CLI Reference
 
-Stage 5 is in progress. The available commands are listed below; resource/type
-writes, lifecycle changes and deletion commands are not yet implemented.
+Stage 5 is in progress. Read, creation and metadata-update commands are available.
+Lifecycle changes and deletion commands are not yet implemented.
 
 Install or refresh the executable from the project root in the existing virtual
 environment:
@@ -65,6 +65,10 @@ There is no password option or setup subcommand.
 | `arkkan resource list -t TYPE` | List resource metadata for a type. |
 | `arkkan resource default SLUG` | Show the default version identifier. |
 | `arkkan resource info SLUG` | Show metadata and all version states, without content. |
+| `arkkan resource add SLUG VERSION` | Create a version; accepts `-t TYPE`, `-n NAME`, `-d DESCRIPTION`, `-f FILE`, `-i VERSION_INFO`, `-s STATE`. |
+| `arkkan resource update SLUG` | Set or clear resource/version metadata as described below. |
+| `arkkan type add TYPE` | Create a custom type; optional `-d DESCRIPTION`. |
+| `arkkan type update TYPE` | Supply exactly one of `-d DESCRIPTION` or `--clear-description`. |
 
 Append `-j` to any available operational command for the complete API response
 JSON. Without it, `resource get` writes only content, preserving empty content
@@ -72,10 +76,37 @@ and existing newlines; other commands print concise metadata. Human-readable
 API errors go to standard error; JSON API errors go to standard output with
 exit code 1. Success exits 0; syntax/local input errors exit 2. `-m` requires
 `-v`; options belong to their own command. `-h` and `--help` work at each
-implemented command level without connecting. `arkkan type -h` currently
-identifies its administration commands as pending.
+implemented command level without connecting.
 
-WP1 has local unit and executable-installation coverage. Real CLI database
+Creation and updates require an administrator account. For `resource add`, `-t`
+is required for a new resource and optional for an existing one; PostgreSQL
+validates type matching. `-n` and `-d` apply only to a new resource definition.
+The default state is `disabled`; a disabled version cannot be retrieved. New
+versions may also use `enabled` or `enabled_default`, subject to database policies.
+Omitted `-f` supplies empty content. `-f FILE` reads the complete UTF-8 file;
+`-f -` reads UTF-8 standard input. Neither changes source files or normalizes
+newlines. Unreadable input and invalid UTF-8 exit 2 before calling the API.
+
+For `resource update`, use `-n NAME`, `-d DESCRIPTION` and `-i VERSION_INFO`.
+Use `--clear-name`, `--clear-description` or `--clear-info` to clear the
+corresponding field. Each clear option conflicts with its setter. Omitted fields
+remain unchanged; an empty string is stored as empty, not null. `-v VERSION`
+is required exactly when using `-i` or `--clear-info`. Supply at least one update.
+Content is immutable; create another version to change it.
+
+Examples below write to the configured database; choose the intended target
+and administrator credentials first. They are usage examples, not recorded test runs.
+
+```bash
+arkkan resource add example v1 -t task -f prompt.txt -s enabled_default
+arkkan resource update example -d ''
+arkkan resource update example --clear-description
+arkkan resource update example -v v1 -i 'Initial version'
+arkkan type add custom -d 'Custom resources'
+arkkan type update custom --clear-description
+```
+
+WP1–WP2 have local unit coverage; WP1 also verifies executable installation. Real CLI database
 validation remains pending; see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
 
 ## Python API Reference
