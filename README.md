@@ -12,8 +12,9 @@ November 24, 2026. Stage 3 implements all 16 PostgreSQL API operations and their
 role permissions and was accepted on November 25, 2026. See the
 [Stage 3 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) for validation
 evidence. Stage 4 is in progress: all 16 Python API functions are implemented
-and unit-tested. Stage 4 PostgreSQL integration validation and the CLI remain
-pending.
+and unit-tested; focused PostgreSQL integration tests also pass. Stage 4
+validation evidence is recorded in [the handover](ARKKAN_HANDOVER.md). Final stage
+documentation and acceptance remain pending; the CLI is not yet implemented.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -67,9 +68,8 @@ call signatures (missing, extra, duplicate or unknown arguments) raise `TypeErro
 `get_resource_version_default(slug)` identifies the default version;
 `list_resources_matching_type(type_slug)` returns resource metadata for a type,
 including resources with no versions. See the technical requirements for full
-response payloads and PostgreSQL selection policies. Actual database integration
-validation of these Python wrappers is pending; the examples are usage guidance,
-not recorded database test results.
+response payloads and PostgreSQL selection policies. See
+[the handover](ARKKAN_HANDOVER.md) for database validation results and revisions.
 
 Resource and resource-type administration functions are also exported from
 `arkkan` and require `arkkan_admin` permissions, enforced by PostgreSQL:
@@ -97,7 +97,7 @@ not modified. `add_resource_type(slug, description=None)` creates a custom type;
 
 These functions use the same configuration and response/error conventions as
 reads. They call the existing SQL API; protected-type, immutability and lifecycle
-rules are enforced there. Their PostgreSQL integration validation is pending.
+rules are enforced there.
 
 Lifecycle and deletion functions use the same response conventions and require
 `arkkan_admin` permissions:
@@ -116,7 +116,6 @@ Import these functions from `arkkan`. Bulk state changes have no force option.
 Supply an actual boolean for `force`, not a string or integer. Explicit `None`
 is passed as SQL NULL and rejected by PostgreSQL. PostgreSQL enforces lifecycle,
 default-preservation and deletion rules; these wrappers do not duplicate them.
-Their actual PostgreSQL integration validation remains pending in WP5.
 
 ## Examples
 

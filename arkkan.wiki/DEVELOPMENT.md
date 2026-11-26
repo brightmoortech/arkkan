@@ -180,8 +180,9 @@ grants schema usage and appropriate function execution to `arkkan_admin` and
 `arkkan_user`. Ordinary roles have no direct application-table or private-helper
 access. Stage 4 WP2 provides Python read wrappers, and WP3 adds resource/type
 administration wrappers. WP4 completes the Python API with lifecycle/deletion
-wrappers. PostgreSQL integration validation of the Python API and the CLI remain
-pending.
+wrappers. WP5 adds real PostgreSQL integration tests for all 16 Python operations.
+See [the handover](../ARKKAN_HANDOVER.md) for actual results and revisions. Final
+Stage 4 documentation and acceptance remain pending; the CLI is not implemented.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -198,8 +199,8 @@ From the configured development checkout, with the environment verified by
 This is a dry run, equivalent to `--check`. It checks PostgreSQL compatibility,
 superuser privileges, local environment identity, and all ordered migration
 steps without writing to the database. Review the target and the `PENDING`
-and `UNCHANGED` results. On a compliant WP4 database, the WP5 dry run should
-report migrations 001–036 unchanged and 037 pending. On a compliant Stage 2
+and `UNCHANGED` results. On a compliant Stage 3 WP4 database, the Stage 3 WP5
+dry run should report migrations 001–036 unchanged and 037 pending. On a compliant Stage 2
 database, migrations 013–037 should be pending. Apply only after verifying the
 intended target and reviewing the plan:
 
@@ -422,6 +423,27 @@ data that must be retained. Resets preserve the independent environment
 identity and persistent storage, and reject unexpected dependencies rather
 than using cascading drops. Stage 3 tests cover the public SQL API, lifecycle
 rules, concurrency, rollback and role permissions.
+
+## Python API Integration Validation
+
+Stage 4 WP5 adds `tests/integration/test_python_api.py`. It initializes and resets
+application objects with the existing staging helpers, provisions temporary
+admin/reader passwords and a mode-0600 temporary client password file, and calls
+the public Python API using real Psycopg connections. Operator credential files
+are never changed. Each API connection is preceded by staging verification and
+checked for closure afterward. The safety hook checks runtime connection options;
+it does not replace database execution or authentication with a test double.
+
+Run the focused suite from a clean staging checkout of the committed revision:
+
+```bash
+.venv/bin/python -m pytest tests/integration/test_python_api.py -q
+```
+
+The full regression still requires `tests/unit` and all `tests/integration`.
+Do not run concurrent database suites or retain valuable application data in
+staging: the fixtures reset application objects and roles before and after tests.
+Consult [the handover](../ARKKAN_HANDOVER.md) for results and tested revisions.
 
 ## Project Documentation
 

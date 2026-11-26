@@ -306,7 +306,7 @@ both private state helpers.
 
 These cases are in `tests/unit/test_api.py`. Driver doubles isolate the Python
 execution boundary; no PostgreSQL connection is opened. Public wrappers and
-actual PostgreSQL integration are subsequent packages. Stage 4 acceptance still
+actual PostgreSQL integration are covered by subsequent packages. Stage 4 acceptance still
 requires all operation/error integration cases and prior-stage regression tests.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
@@ -326,7 +326,7 @@ requires all operation/error integration cases and prior-stage regression tests.
 Cases in `tests/unit/test_read.py` exercise the four exported functions with a
 double for the shared execution boundary. They verify Python routing and local
 validation, not PostgreSQL selection, permissions or transaction behavior.
-Those database checks remain required for Stage 4 integration validation.
+WP5 covers those database checks; see the handover for actual execution evidence.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -343,7 +343,7 @@ Those database checks remain required for Stage 4 integration validation.
 Cases in `tests/unit/test_write.py` isolate execution with a test double and use
 the pinned Psycopg JSONB dumper to verify serialization without a connection.
 They establish wrapper behavior, not PostgreSQL business-policy enforcement;
-database integration and the cumulative stage acceptance gate remain pending.
+WP5 covers database integration; stage acceptance remains a separate gate.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -360,7 +360,7 @@ database integration and the cumulative stage acceptance gate remain pending.
 
 Cases in `tests/unit/test_lifecycle.py` use a double for the execution boundary.
 They verify Python contracts only; PostgreSQL policy enforcement, permissions,
-transactions and cumulative integration validation remain scheduled for WP5.
+transactions and cumulative integration validation are covered by WP5.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -370,3 +370,27 @@ transactions and cumulative integration validation remain scheduled for WP5.
 | S4-027 | Python input validation; safe errors | `test_s4_027_invalid_types`: reject booleans and other non-text values in every text position, and non-boolean/non-null force values, without execution or exposing input. |
 | S4-028 | Common API Contracts / Response JSON | `test_s4_028_response_passthrough`: preserve success/error envelopes, zero counts and state payloads unchanged for every operation. |
 | S4-029 | Python call contracts | `test_s4_029_malformed_calls`: reject excessive/unknown arguments, missing/duplicate required arguments and force on bulk operations with TypeError before execution. |
+
+### Work Package 5: Python/PostgreSQL integration
+
+Cases in `tests/integration/test_python_api.py` run at a committed revision in
+verified staging. Each test initializes and resets application objects through
+the existing guarded helpers. Temporary admin/reader passwords use a protected
+temporary client file; operator credentials remain unchanged. A connection hook
+verifies the staging target before opening each real Psycopg connection with the
+Python API's runtime options. Queries, authentication, transactions, JSONB
+adaptation and responses are real; this hook is a safety guard, not a database double.
+Every completed call checks its response envelope and connection closure.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S4-030 | Python Interface; reads and metadata writes | `test_s4_030_write_and_read_contracts`: real admin writes persist, JSONB updates retain empty/null values and caller input; both roles read all content call forms/modes and metadata; Unicode/SQL-like identifiers remain literal. |
+| S4-031 | Python Interface; lifecycle/deletion | `test_s4_031_lifecycle_and_deletion`: exercise all seven wrappers, force/default protection, bulk/guarded transitions, deletion counts including zero, retained empty resources and custom-type deletion. |
+| S4-032 | Security; error translation | `test_s4_032_reader_cannot_write`: every write operation is denied under the real reader login, returns a safe permission error and preserves application data. |
+| S4-033 | Input validation; atomicity | `test_s4_033_invalid_calls_preserve_data`: invalid read/write/lifecycle inputs produce common errors and leave the resource metadata/version state unchanged. |
+| S4-034 | Transactions; safe diagnostics | `test_s4_034_failure_rolls_back`: inject a version-insertion failure after resource creation, verify rollback and sanitized diagnostics, remove the trigger and confirm recovery. |
+| S4-035 | Connection failures; runtime configuration | `test_s4_035_connection_failure`: deny login to the temporary reader role, verify a safe connection error, restore login and confirm a subsequent database response. |
+
+Run these cases with all earlier unit and integration tests for the cumulative
+WP5 gate. The Stage 4 handover records interim execution evidence; the final
+stage report and acceptance checkpoint remain WP6 deliverables.

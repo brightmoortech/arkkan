@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-25
 
-**Resume point:** Stage 4 WP4 implemented and unit-tested; stop before WP5
+**Resume point:** Stage 4 WP5 complete; stop before WP6
 
 **Audience:** A new development chat continuing the existing project.
 
@@ -31,7 +31,7 @@ been supplied; acceptance does not add new test-execution evidence.
 
 The result is 16 specified operations exposed through 18 public SQL signatures
 and 37 ordered migrations. No Stage 3 implementation work is known to remain.
-Python resource wrappers, CLI and end-to-end application workflows remain
+Python resource wrappers, CLI and end-to-end application workflows belong to
 Stages 4, 5 and 6 respectively; they are not missing Stage 3 deliverables.
 
 The owner subsequently authorized Stage 4, with **one work package at a time
@@ -40,7 +40,7 @@ to manage credits**. WP1 implements the private Python execution boundary in
 transaction/connection cleanup, decoded response validation and safe error
 translation. WP2 adds four public read wrappers; WP3 adds five resource/type
 administration wrappers; WP4 completes all 16 operations with lifecycle/deletion
-wrappers. WP5 requires the owner's
+wrappers. WP5 integration/regression is complete; WP6 requires the owner's
 next instruction; Stage 5 is not authorized. No dependencies have been added.
 
 ### Stage 4 work packages and progress
@@ -51,18 +51,65 @@ does not constitute Stage 4 acceptance.
 
 | Package | Planned deliverable | Current status | Evidence / remaining validation |
 |---|---|---|---|
-| WP1 — API foundation | Shared parameterized SQL execution, runtime configuration, transaction/connection handling, decoded JSON responses and safe errors | Complete for WP1 scope | Commit `adfa9d5`; 311 unit tests passed, including 39 new cases; two source audits completed. Real database validation remains pending in WP5. |
-| WP2 — Read operations | Content retrieval in all three call forms, type-based listing, default-version lookup and resource information; public exports and focused tests | Complete for WP2 scope | Commit `dcda13f`; 391 unit tests passed, including 80 new WP2 cases; two source audits completed. Real database validation remains pending in WP5. |
-| WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Complete for WP3 scope | 471 unit tests passed, including 80 new WP3 cases; two source audits completed. Commit `7319986`. Real database validation remains pending in WP5. |
-| WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Complete for WP4 scope | 592 unit tests passed, including 121 new WP4 cases; two source audits completed. Locate the package commit with `git log -1 -- tests/unit/test_lifecycle.py`. Actual database validation remains pending in WP5. |
-| WP5 — Integration and regression | PostgreSQL tests for every Python operation using reader/admin roles; permissions, response contracts, rollback and connection failures; cumulative prior-stage regression | Not started — next package | Await owner's instruction. Run against a committed revision in guarded staging; record actual results and resolve failures. |
+| WP1 — API foundation | Shared parameterized SQL execution, runtime configuration, transaction/connection handling, decoded JSON responses and safe errors | Complete for WP1 scope | Commit `adfa9d5`; 311 unit tests passed, including 39 new cases; two source audits completed. Database validation is recorded under WP5 below. |
+| WP2 — Read operations | Content retrieval in all three call forms, type-based listing, default-version lookup and resource information; public exports and focused tests | Complete for WP2 scope | Commit `dcda13f`; 391 unit tests passed, including 80 new WP2 cases; two source audits completed. Database validation is recorded under WP5 below. |
+| WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Complete for WP3 scope | 471 unit tests passed, including 80 new WP3 cases; two source audits completed. Commit `7319986`. Database validation is recorded under WP5 below. |
+| WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Complete for WP4 scope | 592 unit tests passed, including 121 new WP4 cases; two source audits completed. Commit `d9c48dd`. Database validation is recorded under WP5 below. |
+| WP5 — Integration and regression | PostgreSQL tests for every Python operation using reader/admin roles; permissions, response contracts, rollback and connection failures; cumulative prior-stage regression | Complete for WP5 scope | All 677 distinct cases passed across cumulative execution and targeted retest; see results and revision limits below. Test checkpoint `7e7d5be`. |
 | WP6 — Documentation and handover | Final usage/development guidance, test traceability, Stage 4 execution report, registry and handover; final audits and acceptance checkpoint | Not started | Package-level documentation is maintained incrementally. `TEST_EXECUTION_PHASE1_STAGE4.md` has not yet been created; Stage 4 acceptance remains pending. |
 
-**Progress:** 4 of 6 packages complete; WP5–WP6 not started. This is a package
-count, not an estimate of effort completed. The owner requested a push before WP4;
-all checkpoints through `7319986` were pushed successfully to `origin/main`.
-WP4 is delivered as a local commit. No Stage 4 PostgreSQL integration results
-are available yet.
+**Progress:** 5 of 6 packages complete; WP6 not started. This is a package count,
+not an estimate of effort completed. The owner requested a push before WP5;
+all checkpoints through `d9c48dd` were pushed successfully to `origin/main`.
+WP5 checkpoints are local commits and have not been pushed.
+
+WP5 validation evidence on 2026-11-25:
+
+- Test checkpoint `79105de` introduced S4-030–035. Its first focused run produced
+  six setup errors because `Path.open` does not accept `opener`; no API case passed.
+- Correction checkpoint `b663ad8` uses builtin `open` with mode-0600 creation and
+  verifies staging immediately before the real API connection, preventing the
+  guard from translating the connection failure under test.
+- Focused staging command: `.venv/bin/python -m pytest tests/integration/test_python_api.py -q --junitxml=/private/tmp/arkkan-wp5-b663ad8-focused.xml`.
+  Result: **6 passed in 354.24 seconds**, no failures/errors/skips.
+- Cumulative staging command at `b663ad8`: `.venv/bin/python -m pytest tests/unit tests/integration -q --junitxml=/private/tmp/arkkan-stage4-b663ad8.xml`.
+  Result: **670 passed, 1 failed, 6 setup errors in 1587.20 seconds**, no skips.
+  S2-030 removed the staging container, but immediate setup reported port 5442
+  unavailable. The six Python API cases then correctly failed their safety guards.
+  A later guarded setup succeeded. The surviving persistence marker and non-login
+  role were verified and removed with restrictive cleanup; storage and identity
+  were preserved. No unrelated container or port configuration was changed.
+- Audit correction `7e7d5be` makes rollback-test helper creation and cleanup atomic.
+  Development unit rerun: **592 passed in 1.11 seconds**.
+- Supplemental staging command at `7e7d5be`: `.venv/bin/python -m pytest tests/unit tests/integration/test_environment_management.py tests/integration/test_python_api.py -q --junitxml=/private/tmp/arkkan-wp5-7e7d5be-retest.xml`.
+  Result: **605 passed in 465.16 seconds**, no failures/errors/skips: 592 unit,
+  7 environment-management and 6 Python API tests. S2-030 and every previously
+  blocked API case passed; the rollback-test correction passed at this revision.
+- Combined JUnit case matching confirms **677 distinct cases have passed**:
+  592 unit and 85 integration, covering S1-001–006, S2-001–068, S3-001–032 and
+  S4-001–035. This is evidence across two runs, not a single clean full-suite run
+  at `7e7d5be`. Unaffected tests retain their successful evidence from `b663ad8`.
+- Post-retest `.venv/bin/python scripts/manage_environment.py check` passed in
+  staging. The staging checkout is clean; application fixtures were cleaned up.
+- Tests use real admin/reader authentication with temporary credentials, validate
+  all 16 operations, enforce reader denial, check invalid-input preservation,
+  injected rollback and connection failure/recovery, and assert connection closure.
+- No application, SQL, dependency or configuration changes were required. The
+  port conflict was transient in observation; its underlying cause is not established.
+  The conflict did not recur during the environment-management retest. If it
+  recurs, investigate the port owner/release timing before changing provisioning.
+- Supplementary JUnit SHA-256 checksums (temporary files may be cleaned up):
+  focused `b663ad8`: `cf2bfd2bb018146f2f66dbfdfc5813530fbd232047e672ada1ad606cd0f18231`;
+  cumulative `b663ad8`: `908458f92831bc87c6d0e2d45750428824f7a69d205e386f1b4f7e1ac062ba01`;
+  retest `7e7d5be`: `b72d16dd97595865f39e114a206b057719e84868dbc172df756bf077e037b4c6`.
+
+WP5 source audits checked real authentication, all operation contracts, failure
+translation, rollback, fixture isolation and cleanup, then maintainability and
+reuse of existing guarded helpers. Corrections addressed protected password-file
+creation, exception isolation and atomic helper setup/cleanup. All affected cases
+passed afterward; no unresolved application defect was found. README, DEVELOPMENT,
+TEST_SPECIFICATION and this handover completed content/compliance and quality
+audits before the documentation checkpoint. The final Stage 4 report remains WP6 work.
 
 WP4 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **592 tests**, including 121 new cases covering S4-024–029. All 16 public
@@ -77,8 +124,8 @@ alphabetical public exports. Both passes completed with no unresolved finding.
 
 WP3 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **471 tests**, including 80 new cases covering S4-017–023. Nine public
-operations are now exported. `src/arkkan/_write.py` binds text arguments and uses
-Psycopg JSONB adaptation for metadata changes, preserving omitted keys, nulls,
+operations were exported at that checkpoint. `src/arkkan/_write.py` binds text
+arguments and uses Psycopg JSONB adaptation for metadata changes, preserving omitted keys, nulls,
 empty strings and the caller's dictionary. SQL retains key, target, permission,
 immutability and state validation. No database tests were run for WP3.
 
@@ -103,10 +150,9 @@ and added keyword-call coverage. No unresolved WP2 source finding remains.
 
 WP1 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **311 tests**, including 39 new cases covering S4-001–009. No database
-tests were run for WP1; actual PostgreSQL integration and the cumulative full
-regression remain pending for Stage 4. The package's source and documentation
-are committed together; locate its checkpoint with
-`git log -1 -- src/arkkan/_api.py`. No Stage 4 acceptance is claimed.
+tests were run for WP1; its database validation is recorded under WP5 above.
+The package's source and documentation are committed together; locate its
+checkpoint with `git log -1 -- src/arkkan/_api.py`. No Stage 4 acceptance is claimed.
 
 WP1 review findings: correctness review removed a redundant rollback attempt
 after rollback failure and added coverage for that path, including combined
@@ -117,20 +163,20 @@ of duplicated lifecycle rules. No unresolved WP1 source finding remains.
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
-- Pushed closeout: `f092375f095c59d1b7ad942c323b98e401221ad3`.
-- Tested implementation: `da6d921758f07356a5fefa340ad63678a09b88d6`.
-- The closeout commit changes documentation only; source, tests and configuration
-  match the tested implementation.
-- All Stage 3 package commits were pushed to `origin/main`; the push completed successfully.
-  Before this acceptance update, local `HEAD` and `origin/main` both resolved to
-  `f092375`. The handover and acceptance update are delivered in a later documentation commit.
-- Staging: `/Users/haitham/development/stage/arkkan`, clean detached checkout at
-  `f092375` when inspected for this handover. The assistant's recorded suite ran
-  earlier at `da6d921`. The newer staging checkout is not evidence of a new test run.
-- This handover and its AGENTS registry entry were created after `f092375`.
-  The acceptance update also synchronizes README and the Stage 3 execution report.
-  An unrelated local table-formatting edit in `arkkan.wiki/TECHNICAL_REQ.md` was
-  present during this update and excluded from its commit. Preserve it on resumption.
+- Remote `origin/main` was pushed through Stage 4 WP4, `d9c48dd`.
+- WP5 test commits are local: `79105de`, `b663ad8`, and
+  `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
+  integration test's helper transactions. Application source, SQL and configuration
+  are identical across these checkpoints.
+- Staging: `/Users/haitham/development/stage/arkkan`, detached at `7e7d5be` for
+  supplemental verification. The cumulative run used `b663ad8`; do not describe
+  it as a full run at the newer revision.
+- Stage 3 historical tested implementation:
+  `da6d921758f07356a5fefa340ad63678a09b88d6`; documentation closeout:
+  `f092375f095c59d1b7ad942c323b98e401221ad3`. Both were pushed. Later commits
+  recorded owner acceptance and the Stage 4 packages above.
+- An unrelated local table-formatting edit in `arkkan.wiki/TECHNICAL_REQ.md`
+  remains excluded from WP5. Preserve it on resumption.
 
 The owner prefers repository commits as delivery. Do not produce replacement
 ZIPs unless requested. The earlier ZIP-based handover workflow is obsolete.
@@ -170,8 +216,10 @@ each received content/compliance and document-quality audits before WP6 was comm
 
 1. **Stage 3 is accepted.** The owner will wait for the CLI before further manual
    testing. No additional owner validation is a pending Stage 3 acceptance gate.
-2. **Stage 4 WP1–WP4 are implemented; WP5 awaits the owner's instruction.**
-   Remaining packages cover integration/regression and final documentation/acceptance.
+2. **Stage 4 WP1–WP5 are complete; WP6 is next.**
+   Final documentation, the Stage 4 execution report and acceptance remain pending.
+   The transient S2-030 port conflict and successful retest are recorded above;
+   its root cause was not established.
    Stage 4 authorization does not authorize Stage 5.
 3. **No unresolved Stage 3 defect is recorded.** S3-KI-001 through S3-KI-010 are
    retained as resolved findings in the final execution report. Do not delete that
@@ -207,7 +255,7 @@ TESTING, DEVELOPMENT and TEST_SPECIFICATION in `arkkan.wiki`, plus applicable re
 Read DOCUMENT_GOVERNANCE before documentation changes. Requirements remain authoritative;
 distinguish attached-document guidance from the user's current request.
 
-- PostgreSQL owns business rules. Future Python wrappers must use parameterized SQL,
+- PostgreSQL owns business rules. Python wrappers must use parameterized SQL,
   preserve the common JSON response, translate database errors at the API boundary,
   and manage connections/transactions without duplicating lifecycle rules.
 - Public SQL lives in `arkkan_api`; internal helpers and tables live in `arkkan`.
@@ -245,9 +293,10 @@ Baseline: macOS, Python 3.12.10, pytest 9.1.1, Psycopg binary 3.3.9 and PostgreS
 external under `~/development/data/arkkan/`. Credentials are operator-managed;
 reuse protected files without displaying, committing or recreating them.
 
-The owner was given this validation sequence and subsequently chose to wait for
-the CLI. It remains an optional reference, not a pending acceptance requirement
-or evidence of owner execution. Preserve local changes before switching revisions.
+The owner was given this Stage 3 validation sequence and subsequently chose
+to wait for the CLI. It targets the historical Stage 3 checkpoint. It remains an
+optional reference, not a pending acceptance requirement or evidence of owner
+execution. Preserve local changes before switching revisions.
 Do not start a second suite against the same staging database concurrently.
 
 ```bash
@@ -274,12 +323,15 @@ Read this handover and governing sources; inspect Git status, recent commits and
 the staging checkout without disturbing an active validation run. Preserve newer
 owner changes. Review any supplied validation results and resolve confirmed issues
 within the authorized scope. Stage 3 acceptance is already recorded; do not ask
-the owner to accept it again. Stop after Stage 4 WP4 until instructed to start WP5.
+the owner to accept it again. WP5 is complete; stop before WP6 until instructed.
 
-On the next instruction, implement WP5 PostgreSQL integration tests for all Python
-operations and execute the cumulative regression in guarded staging at a committed
-revision. Continue one package at a time, committing each completed
-package and stopping for the owner's next instruction.
+On the next instruction, complete WP6: consolidate final API usage/development
+and test traceability, create `arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md` with
+actual WP5 results and tested revisions, register it in AGENTS, and update this
+handover. Complete both document audits and any affected verification, commit,
+and present the Stage 4 acceptance checkpoint. Preserve the distinction between
+the failed cumulative run and successful targeted retest; do not invent a clean
+full run. Continue one package at a time, stopping for the owner's next instruction.
 Use the existing SQL API and configuration infrastructure; do not invent extra public
 operations or begin CLI work. Stage 4 must pass unit and staging integration tests
 for all specified operations and errors before its own acceptance checkpoint.
