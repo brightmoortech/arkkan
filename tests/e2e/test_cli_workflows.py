@@ -91,13 +91,18 @@ def test_s5_025_creation_reads_and_metadata(cli: Callable, tmp_path: Path) -> No
     _json(cli("type", "add", "custom", "-d", "original", "-j"), "add_resource_type")
     _json(cli("type", "update", "custom", "--clear-description", "-j"), "update_resource_type")
     _json(cli("resource", "add", slug, "v1", "-t", "custom", "-f", str(source),
-              "-s", "enabled_default", "-j"), "add_resource")
+              "-n", "Original", "-d", "Original", "-s", "enabled_default", "-j"), "add_resource")
     _json(cli("resource", "add", slug, "v2", "-f", "-", "-s", "enabled", "-j",
               content=b"second\r\n"), "add_resource")
     _json(cli("resource", "add", slug, "empty", "-s", "enabled", "-j"), "add_resource")
-    _json(cli("resource", "update", slug, "-n", "", "--clear-description",
+    _json(cli("resource", "update", slug, "-n", "", "-d", "",
               "-v", "v2", "-i", "revised", "-j"), "update_resource")
-    _json(cli("resource", "update", slug, "-v", "v2", "--clear-info", "-j"), "update_resource")
+    info = _json(cli("resource", "info", slug, "-j"), "get_resource_info")
+    assert info["name"] == "" and info["description"] == ""
+    with _staging_connection(_ROOT) as connection:
+        assert connection.execute("SELECT version_info FROM arkkan.resource_versions WHERE version='v2'").fetchone() == ("revised",)
+    _json(cli("resource", "update", slug, "--clear-name", "--clear-description",
+              "-v", "v2", "--clear-info", "-j"), "update_resource")
     for role in ("arkkan_admin", "arkkan_user"):
         for options, expected in [([], content), (["-v", "v2"], b"second\r\n"),
                                   (["-v", "empty"], b""),
@@ -109,7 +114,7 @@ def test_s5_025_creation_reads_and_metadata(cli: Callable, tmp_path: Path) -> No
         data = _json(cli("resource", "get", slug, "-j", role=role), "get_resource_content")
         assert data["content"].encode("utf-8") == content
         info = _json(cli("resource", "info", slug, "-j", role=role), "get_resource_info")
-        assert info["name"] == "" and info["description"] is None
+        assert info["name"] is None and info["description"] is None
         assert len(info["versions"]) == 3 and "content" not in info
         assert _json(cli("resource", "default", slug, "-j", role=role),
                      "get_resource_version_default")["version"] == "v1"
