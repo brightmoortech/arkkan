@@ -15,9 +15,8 @@ evidence. Stage 4 implements all 16 Python API functions and is ready for owner
 acceptance. The [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
 records successful coverage of all 677 tests across cumulative execution and a
 targeted rerun, including the transient staging failure. Stage 4 acceptance is
-deferred until the owner can validate through the CLI. Stage 5 WP1–WP2 provide the
-installed CLI, four read commands, creation and metadata updates. Lifecycle/
-deletion commands and database-backed CLI validation remain pending.
+deferred until the owner can validate through the CLI. Stage 5 WP1–WP3 provide
+all 16 CLI operation mappings, including lifecycle changes and deletion. Database-backed CLI validation remains pending.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -35,8 +34,8 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 
 ## CLI Reference
 
-Stage 5 is in progress. Read, creation and metadata-update commands are available.
-Lifecycle changes and deletion commands are not yet implemented.
+Stage 5 is in progress. All specified commands are implemented; real CLI database
+validation and cumulative regression remain pending.
 
 Install or refresh the executable from the project root in the existing virtual
 environment:
@@ -69,6 +68,14 @@ There is no password option or setup subcommand.
 | `arkkan resource update SLUG` | Set or clear resource/version metadata as described below. |
 | `arkkan type add TYPE` | Create a custom type; optional `-d DESCRIPTION`. |
 | `arkkan type update TYPE` | Supply exactly one of `-d DESCRIPTION` or `--clear-description`. |
+| `arkkan type delete TYPE` | Delete an unused custom type. |
+| `arkkan resource delete-version SLUG -v VERSION` | Delete one obsolete version, keeping the resource. |
+| `arkkan resource delete-obsolete SLUG` | Delete all obsolete versions of a resource, keeping its definition. |
+| `arkkan resource cleanup` | Delete obsolete versions across all resources, keeping definitions. |
+| `arkkan resource delete SLUG` | Delete an empty resource or one whose versions are all obsolete. |
+| `arkkan resource state SLUG -v VERSION -s STATE` | Change one version's state; optional `-F` allows default removal without replacement. |
+| `arkkan resource state-all SLUG -s STATE` | Change all versions atomically. |
+| `arkkan resource state-matching SLUG -g STATE -s STATE` | Change versions matching source state `-g` to target state `-s`, atomically. |
 
 Append `-j` to any available operational command for the complete API response
 JSON. Without it, `resource get` writes only content, preserving empty content
@@ -94,6 +101,15 @@ remain unchanged; an empty string is stored as empty, not null. `-v VERSION`
 is required exactly when using `-i` or `--clear-info`. Supply at least one update.
 Content is immutable; create another version to change it.
 
+Lifecycle and deletion commands require administrator permissions. PostgreSQL
+checks transitions, default preservation and deletion eligibility. `-F` is valid
+only on `resource state`; it permits removing a default without replacement and
+does not bypass other lifecycle rules. Bulk state commands have no force option.
+Counts of zero are successful results for bulk changes and obsolete-version cleanup.
+Deleting the last version keeps its resource definition; use `resource delete`
+to remove an eligible definition explicitly. Protected or referenced types cannot
+be deleted.
+
 Examples below write to the configured database; choose the intended target
 and administrator credentials first. They are usage examples, not recorded test runs.
 
@@ -106,7 +122,7 @@ arkkan type add custom -d 'Custom resources'
 arkkan type update custom --clear-description
 ```
 
-WP1–WP2 have local unit coverage; WP1 also verifies executable installation. Real CLI database
+WP1–WP3 have local unit coverage; WP1 also verifies executable installation. Real CLI database
 validation remains pending; see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
 
 ## Python API Reference

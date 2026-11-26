@@ -410,8 +410,8 @@ affected-test rerun separately. Owner acceptance is a separate decision.
 doubles. Database connections are blocked. The installed executable is exercised
 from a temporary directory for help only. These 66 cases bring the unit inventory
 to 658 at WP1; they do not establish real PostgreSQL CLI behavior. WP2 adds
-creation/update, UTF-8 input and clearing cases below. Lifecycle and real
-authorization coverage remain for subsequent packages. Actual results are in the
+creation/update, UTF-8 input and clearing cases below. WP3 adds lifecycle and
+deletion coverage; real CLI authorization remains for WP4. Actual results are in the
 [Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
@@ -429,7 +429,7 @@ authorization coverage remain for subsequent packages. Actual results are in the
 ### Work Package 2: Creation and metadata updates
 
 `tests/unit/test_cli_write.py` adds 145 cases with public API doubles and blocked
-database connections. The cumulative unit inventory is 803 (211 CLI cases).
+database connections. The cumulative unit inventory at WP2 is 803 (211 CLI cases).
 Temporary files and binary-backed stdin verify input preservation; these are
 local boundary tests, not PostgreSQL write or authorization evidence.
 
@@ -445,3 +445,21 @@ local boundary tests, not PostgreSQL write or authorization evidence.
 | S5-016 | CLI / output and errors | `test_s5_016_write_output`: new commands preserve complete JSON responses and API errors; human output includes identifiers/updated fields, correct streams and exit codes. |
 | S5-017 | CLI / safe local input failures | `test_s5_017_read_failure_sanitized`: simulated file/stdin permission failures exit 2 before API calls without leaking raw diagnostics. |
 | S5-018 | CLI / reject syntax before processing | `test_s5_018_syntax_before_input`: an invalid option rejects a stdin-based creation command without consuming stdin or calling the API. |
+
+
+### Work Package 3: Lifecycle and deletion commands
+
+`tests/unit/test_cli_lifecycle.py` adds 128 cases with public API doubles and
+blocked database connections. The cumulative inventory is 931 unit cases,
+including 339 CLI cases. All 16 command mappings now have local coverage;
+actual lifecycle policy, persistence and authorization through the executable
+remain WP4 validation, not evidence established by these doubles.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S5-019 | CLI / lifecycle and deletion command mappings; output/errors | `test_s5_019_lifecycle_mapping_and_output`: each of eight new commands calls exactly its public API with the expected arguments; human/JSON success and API errors use the correct streams, identifiers/counts and exit codes. |
+| S5-020 | CLI / literal positional and state tokens | `test_s5_020_literal_lifecycle_tokens`: preserve empty, whitespace and Unicode/SQL-like tokens without local business-policy validation. |
+| S5-021 | CLI / single-version force | `test_s5_021_force_and_state_policy`: absent/present `-F` maps to false/true for all four states and an invalid state; API rejection is preserved even with force. |
+| S5-022 | CLI / successful zero counts | `test_s5_022_zero_counts`: all five count-returning operations display zero and exit successfully. |
+| S5-023 | CLI / option scope and syntax rejection | `test_s5_023_invalid_lifecycle_arguments`: missing inputs, irrelevant options and abbreviated help fail before API calls; all 15 operations other than single-version state reject `-F`. |
+| S5-024 | CLI / help | `test_s5_024_lifecycle_help`: both help flags work for all eight new commands without connecting; only single-version state advertises `-F`. |

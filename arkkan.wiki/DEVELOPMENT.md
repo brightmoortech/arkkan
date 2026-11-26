@@ -183,8 +183,8 @@ administration wrappers. WP4 completes the Python API with lifecycle/deletion
 wrappers. WP5 adds real PostgreSQL integration tests for all 16 Python operations.
 See the [Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md) for results,
 revisions and limitations. Stage 4 acceptance is deferred until owner CLI testing.
-Stage 5 WP1–WP2 implement the CLI entry point, four reads, creation and metadata
-updates. Subsequent packages add lifecycle/deletion and real CLI database validation.
+Stage 5 WP1–WP3 implement all 16 CLI mappings, including lifecycle/deletion.
+Subsequent packages cover real CLI database validation and cumulative regression.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -467,13 +467,14 @@ never bypass the staging guard or remove unrelated infrastructure.
 `pyproject.toml`. It uses standard-library argument parsing and calls only the
 public `arkkan` API. WP1 covers read commands, help, output and exit codes.
 WP2 adds creation and metadata updates, including clearing and strict UTF-8
-file/stdin input. PostgreSQL retains type, state and permission enforcement.
+file/stdin input. WP3 completes lifecycle/deletion commands and local coverage.
+PostgreSQL retains type, state and permission enforcement.
 See the [CLI reference](../README.md#cli-reference) for installation and usage.
 After changing entry-point metadata, refresh the existing environment:
 
 ```bash
 .venv/bin/python -m pip install --no-deps --no-build-isolation -e .
-.venv/bin/python -m pytest tests/unit/test_cli.py tests/unit/test_cli_write.py -q
+.venv/bin/python -m pytest tests/unit/test_cli.py tests/unit/test_cli_write.py tests/unit/test_cli_lifecycle.py -q
 ```
 
 This installation command reuses the pinned dependencies installed by bootstrap.
@@ -482,7 +483,8 @@ exact content and JSON/error streams, and launches the installed executable's
 help from a temporary working directory. The WP2 suite checks all 63 nonempty
 combinations of omitted/set/empty/cleared metadata fields, preserved input bytes,
 invalid UTF-8 and sanitized read failures, plus argument rejection before stdin
-is consumed. Run the full unit suite for regression.
+is consumed. WP3 checks all eight remaining mappings, literal state tokens,
+force defaults/scope, zero counts, errors and help. Run the full unit suite for regression.
 It does not establish role authorization or real CLI database behavior. Those
 checks will run in `tests/e2e/` in guarded staging at a committed revision.
 Track package progress and actual results in the

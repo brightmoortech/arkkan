@@ -2,7 +2,7 @@
 
 ## Phase 1, Stage 5: CLI
 
-**Status:** In progress; WP1–WP2 complete, WP3–WP6 pending. This report accumulates
+**Status:** In progress; WP1–WP3 complete, WP4–WP6 pending. This report accumulates
 actual evidence and will be finalized at Stage 5 closeout. Stage 4 acceptance
 is deferred until the owner can test through the CLI. The owner explicitly
 authorized Stage 5; no owner acceptance or manual test results are claimed.
@@ -13,7 +13,7 @@ authorized Stage 5; no owner acceptance or manual test results are claimed.
 |---|---|---|
 | WP1 | Installable executable, help, output/errors and four read commands | Complete; checkpoint `0489e93` |
 | WP2 | Resource/type creation and metadata updates, UTF-8 file/stdin input and clearing | Complete; checkpoint `6b591c7` |
-| WP3 | Lifecycle/deletion commands; all 16 command mappings | Pending |
+| WP3 | Lifecycle/deletion commands; all 16 command mappings | Complete; checkpoint `dd0bff2` |
 | WP4 | Real PostgreSQL CLI workflows, role authorization and password-file authentication | Pending |
 | WP5 | Cumulative regression, corrections and verification | Pending |
 | WP6 | Final usage documentation, report, audits and handover | Pending |
@@ -122,14 +122,61 @@ No real database authorization or persistence is inferred from unit doubles.
 The quality pass verified command examples, local link targets, test names and
 cross-document progress consistency; no additional material finding remained.
 
-## 5. Remaining validation and limitations
+## 5. WP3 execution evidence and audits
 
-No PostgreSQL or CLI database tests were run in WP1 or WP2. Public API doubles
+- Date: 2026-11-26, development checkout on the owner's Mac; existing Python
+  3.12.10 / pytest 9.1.1 virtual environment.
+- Tested source checkpoint: `dd0bff247b4b9ed7f3a29526fcfbb57c2010e13a`.
+  Tests ran before commit; the checkpoint contains the tested source and tests.
+- Eight lifecycle/deletion commands complete all 16 CLI mappings. No SQL,
+  dependencies, configuration or public Python API contracts changed.
+
+```bash
+.venv/bin/python -m pytest tests/unit -q --junitxml=/private/tmp/arkkan-stage5-wp3.xml
+.venv/bin/arkkan resource state --help
+```
+
+**Final result: 931 passed in 1.77 seconds; no failures, errors or skips.** This
+includes 803 prior cases and 128 WP3 cases under S5-019–024 (339 CLI cases total).
+The initial run passed 923 cases; review added eight force-scope checks for
+previously implemented commands. Installed executable help succeeded without a
+database connection and describes the restricted force behavior.
+
+JUnit artifact: `/private/tmp/arkkan-stage5-wp3.xml`; host cleanup may remove it.
+SHA-256: `50e03d23644be33ce207ba7a6e54248d05a4e39be4f19b3fb746b496c9afba08`.
+
+| IDs | Verified scope | Outcome |
+|---|---|---|
+| S5-019–020 | Eight exact API mappings, literal inputs, human/JSON output and error streams | Passed |
+| S5-021–022 | Boolean force/default behavior and successful zero counts | Passed |
+| S5-023–024 | Invalid syntax/options before calls, force exclusion on all other commands and help | Passed |
+
+Source audit 1 compared command mappings and response fields with TECHNICAL_REQ
+CLI and Admin API sections, including `changed_count` for bulk state operations.
+It found a low-priority coverage gap: force rejection was checked only for new
+commands. Eight cases now verify rejection on the earlier commands as well.
+Source audit 2 checked explicit dispatch, public API boundaries, typed helpers,
+shared output handling, independent expected test values and regression coverage.
+No additional material finding remained. The final run includes the correction.
+
+README, DEVELOPMENT, TEST_SPECIFICATION, ARKKAN_HANDOVER and this report completed
+separate content/compliance and quality audits. Content checks reconciled command
+syntax, policy descriptions, test names/counts, JUnit evidence, Git checkpoints
+and pending work with requirements and implementation. The revised files retain
+historical results and the owner's deferred acceptance. Quality checks cover
+readability, examples, local links and consistent progress/pickup guidance.
+Minor wording/wrapping corrections clarify the overview and WP2 push status;
+no material content discrepancy or unresolved quality finding remained.
+Database CLI validation remains unexecuted.
+
+## 6. Remaining validation and limitations
+
+No PostgreSQL or CLI database tests were run in WP1–WP3. Public API doubles
 establish routing and presentation only; real authentication, role authorization,
 database failures and command workflows remain WP4 requirements. The existing
 Stage 4 integration evidence is not relabeled as CLI evidence.
 
-All lifecycle/deletion commands, including `type delete`, remain WP3. Prior-stage
-database regression is planned in WP5. Stage 5 is not complete or ready for
+All command mappings are implemented. Real CLI database validation remains WP4;
+prior-stage database regression is planned in WP5. Stage 5 is not complete or ready for
 acceptance. Stage 6 is not authorized. Staging and development database contents
-were not changed by WP1 or WP2.
+were not changed by WP1–WP3.
