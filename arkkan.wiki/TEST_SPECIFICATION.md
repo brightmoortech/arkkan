@@ -411,7 +411,7 @@ doubles. Database connections are blocked. The installed executable is exercised
 from a temporary directory for help only. These 66 cases bring the unit inventory
 to 658 at WP1; they do not establish real PostgreSQL CLI behavior. WP2 adds
 creation/update, UTF-8 input and clearing cases below. WP3 adds lifecycle and
-deletion coverage; real CLI authorization remains for WP4. Actual results are in the
+deletion coverage; WP4 defines real CLI authorization tests below. Actual results are in the
 [Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
@@ -453,7 +453,7 @@ local boundary tests, not PostgreSQL write or authorization evidence.
 blocked database connections. The cumulative inventory is 931 unit cases,
 including 339 CLI cases. All 16 command mappings now have local coverage;
 actual lifecycle policy, persistence and authorization through the executable
-remain WP4 validation, not evidence established by these doubles.
+are covered by WP4, not evidence established by these doubles.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -463,3 +463,23 @@ remain WP4 validation, not evidence established by these doubles.
 | S5-022 | CLI / successful zero counts | `test_s5_022_zero_counts`: all five count-returning operations display zero and exit successfully. |
 | S5-023 | CLI / option scope and syntax rejection | `test_s5_023_invalid_lifecycle_arguments`: missing inputs, irrelevant options and abbreviated help fail before API calls; all 15 operations other than single-version state reject `-F`. |
 | S5-024 | CLI / help | `test_s5_024_lifecycle_help`: both help flags work for all eight new commands without connecting; only single-version state advertises `-F`. |
+
+
+### Work Package 4: Real CLI PostgreSQL workflows
+
+`tests/e2e/test_cli_workflows.py` contains five cases. It runs the installed
+executable in real subprocesses from a temporary directory, with binary input
+and output, explicit staging settings and temporary password files. The shared
+staging guard runs before setup, each invocation and database inspection/cleanup.
+The fixture resets known application objects and roles and removes its temporary
+credential file; it does not modify operator credentials. No API/driver doubles
+are used. The inventory is 931 unit, 85 integration and five e2e cases; WP5
+performs cumulative regression. Consult the execution report for actual outcomes.
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S5-025 | CLI / creation, reads, UTF-8 and metadata clearing | `test_s5_025_creation_reads_and_metadata`: file/stdin/empty content persists and is retrieved exactly by both roles; all read forms/modes, literal identifiers, type creation/update, empty-versus-null resource metadata and version-information setting/clearing work through the executable. |
+| S5-026 | CLI / lifecycle and deletion; resource policies | `test_s5_026_lifecycle_and_deletion`: invalid transitions, default removal, protected/referenced type deletion and active-version deletion are rejected without changes; force, bulk and guarded changes, obsolete cleanup, retained definitions and explicit deletions succeed with correct counts. |
+| S5-027 | CLI / role authorization and password-file use | `test_s5_027_reader_denial_and_authentication`: all 12 write operations are denied to the reader without changes; human/JSON errors use correct streams; missing password file causes sanitized connection failure and restored credentials recover normal API behavior. |
+| S5-028 | CLI / local input failures | `test_s5_028_local_failures_preserve_database`: invalid UTF-8 from file/stdin and an invalid force option exit 2, preserve input/database contents and exclude content from diagnostics. |
+| S5-029 | CLI / database failure and transactional integrity | `test_s5_029_database_failure_rolls_back`: injected version insertion failure rolls back resource creation, sanitizes diagnostics and recovers after guarded removal of the test trigger/function. |

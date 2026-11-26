@@ -184,7 +184,7 @@ wrappers. WP5 adds real PostgreSQL integration tests for all 16 Python operation
 See the [Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md) for results,
 revisions and limitations. Stage 4 acceptance is deferred until owner CLI testing.
 Stage 5 WP1–WP3 implement all 16 CLI mappings, including lifecycle/deletion.
-Subsequent packages cover real CLI database validation and cumulative regression.
+WP4 adds real CLI database tests; WP5 covers cumulative regression.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -442,7 +442,8 @@ Run the focused suite from a clean staging checkout of the committed revision:
 .venv/bin/python -m pytest tests/integration/test_python_api.py -q
 ```
 
-The full regression still requires `tests/unit` and all `tests/integration`.
+The Stage 4 regression requires `tests/unit` and all `tests/integration`.
+Stage 5 adds `tests/e2e`, described below, to cumulative regression.
 Do not run concurrent database suites or retain valuable application data in
 staging: the fixtures reset application objects and roles before and after tests.
 The Stage 4 inventory is 592 unit and 85 integration cases. For reproducible
@@ -485,8 +486,29 @@ combinations of omitted/set/empty/cleared metadata fields, preserved input bytes
 invalid UTF-8 and sanitized read failures, plus argument rejection before stdin
 is consumed. WP3 checks all eight remaining mappings, literal state tokens,
 force defaults/scope, zero counts, errors and help. Run the full unit suite for regression.
-It does not establish role authorization or real CLI database behavior. Those
-checks will run in `tests/e2e/` in guarded staging at a committed revision.
+Local doubles do not establish role authorization or real CLI database behavior.
+WP4 adds `tests/e2e/test_cli_workflows.py`, which launches the installed executable
+from a temporary working directory. Each invocation verifies staging first,
+supplies only the configured target and temporary admin/reader credentials, and
+captures binary stdin/stdout to test exact UTF-8 and newline preservation.
+There are no API or driver doubles inside the child process. Temporary password
+files are created with mode 0600, checked for preservation and removed in cleanup;
+operator credentials remain untouched. Application objects and roles are reset
+through the shared guarded helpers before and after each case.
+
+Refresh staging's editable installation to create its executable, then run the
+focused suite from the clean staging checkout at the selected committed revision:
+
+```bash
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/python -m pytest tests/e2e -q
+```
+
+These cases cover creation, reads, metadata empty/null values, lifecycle and
+deletion, reader denial for all writes, missing-password failure and recovery,
+local-input rejection, and rollback after an injected database failure. They
+reset application data; do not run concurrently with another database suite or
+manual validation. Cumulative regression requires unit, integration and e2e suites.
 Track package progress and actual results in the
 [Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 

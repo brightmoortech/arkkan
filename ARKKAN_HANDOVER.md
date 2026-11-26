@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-26
 
-**Resume point:** Stage 5 WP1–WP3 complete; continue with WP4 when instructed.
+**Resume point:** Stage 5 WP1–WP4 complete; continue with WP5 when instructed.
 Stage 4 acceptance is deferred until owner CLI testing.
 
 **Audience:** A new development chat continuing the existing project.
@@ -179,7 +179,7 @@ then stop. This sequencing decision does not imply acceptance of either stage.
 | WP1 | Installable executable, parser/help, shared output/error handling, four read commands and local tests | Complete |
 | WP2 | Resource/type creation and metadata updates, UTF-8 files/stdin, metadata clearing and local tests | Complete |
 | WP3 | Lifecycle/deletion commands and local tests; complete all 16 command mappings | Complete |
-| WP4 | Real CLI PostgreSQL tests, role authorization, password-file authentication and representative command workflows | Pending |
+| WP4 | Real CLI PostgreSQL tests, role authorization, password-file authentication and representative command workflows | Complete |
 | WP5 | Cumulative prior-stage and CLI regression, corrections and verification | Pending |
 | WP6 | Complete usage guidance, final Stage 5 report, audits and handover | Pending |
 
@@ -189,7 +189,7 @@ It uses standard-library argparse and the public Python API; no SQL or dependenc
 changes. Installation refresh succeeded. The final local unit run passed
 **658 tests in 1.27 seconds**, including **66 CLI cases**, with no failures,
 errors or skips. No database tests ran for WP1. Both source and documentation
-review passes completed; real CLI database validation remains pending.
+review passes completed; WP4 supplies the later real CLI database validation.
 See the [Stage 5 report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md) and
 [CLI usage](README.md#cli-reference). The report is progressive until closeout.
 
@@ -203,27 +203,43 @@ run: **803 passed in 1.51 seconds**, including 145 new WP2 cases. Both source
 and document audit passes completed. No database tests ran; real CLI validation
 remains WP4. One package at a time remains the agreed execution boundary.
 
-WP3 implementation checkpoint is `dd0bff2` (local, not pushed). It adds all eight
-lifecycle/deletion commands, including `type delete`, completing all 16 CLI
+WP3 implementation checkpoint `dd0bff2` and documentation `6b8ef63` are pushed.
+WP3 adds all eight lifecycle/deletion commands, including `type delete`, completing all 16 CLI
 operation mappings. The final development unit run passed **931 tests in 1.77
 seconds**, including 128 new WP3 cases. Two source audits checked command/API
 contracts, force scope, output counts, API boundaries and maintainability.
 No database tests ran and no SQL, dependencies or public API contracts changed.
-Next is WP4: real executable workflows in guarded staging at a committed revision,
-including both roles and password-file authentication. Do not infer CLI database
-acceptance from local doubles or earlier Python API integration evidence.
+WP4 now supplies real executable workflows in guarded staging, separately from
+local doubles and earlier Python API integration evidence.
+
+WP4 adds five cases in `tests/e2e/test_cli_workflows.py`, covering all 16 commands,
+both roles, exact UTF-8 file/stdin retrieval, metadata empty/null persistence,
+lifecycle/deletion policies, all 12 reader write denials, missing-password failure,
+local-input rejection and database rollback. Tests launch the installed executable
+outside the checkout with explicit target settings and temporary mode-0600
+password files; the safety guard precedes each invocation and database operation.
+Temporary credentials are removed; operator credentials and development are untouched.
+Initial checkpoint `c1db1fc` passed all five e2e cases in 337.77 seconds. Audit
+corrections `93a5286` and `a226b9e` strengthen persisted metadata clearing and
+prevent assertion diagnostics from displaying password-file contents. Final
+unit/e2e verification at `a226b9e` passed **936 tests in 345.40 seconds**, with
+no failures, errors or skips. The post-run staging environment check passed.
+Both source and document audit passes are complete; see the Stage 5 report.
+WP4 commits remain local, not pushed.
+After WP4, continue with WP5 cumulative unit/integration/e2e regression. Stage 5
+acceptance and Stage 4 owner acceptance remain pending.
 
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
-- Remote `origin/main` was pushed through Stage 5 WP2 documentation, `37f2bca`.
-- Pushed WP5 test commits are: `79105de`, `b663ad8`, and
+- Remote `origin/main` was pushed through Stage 5 WP3 documentation, `6b8ef63`.
+- Pushed Stage 4 WP5 test commits are: `79105de`, `b663ad8`, and
   `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
   integration test's helper transactions. Application source, SQL and configuration
   are identical across these checkpoints.
-- Staging: `/Users/haitham/development/stage/arkkan`, detached at `7e7d5be` for
-  supplemental verification. The cumulative run used `b663ad8`; do not describe
-  it as a full run at the newer revision.
+- Staging: `/Users/haitham/development/stage/arkkan`, detached at `a226b9e` for
+  Stage 5 WP4 verification. Earlier Stage 4 runs and their revisions remain
+  recorded above; they are not evidence of current cumulative regression.
 - Stage 3 historical tested implementation:
   `da6d921758f07356a5fefa340ad63678a09b88d6`; documentation closeout:
   `f092375f095c59d1b7ad942c323b98e401221ad3`. Both were pushed. Later commits
@@ -382,7 +398,7 @@ the owner to accept it again. Stage 4 is ready for owner acceptance. Review
 transient port conflict and successful rerun; do not describe it as one clean
 full-suite run at the final test revision.
 
-Continue Stage 5 with WP4 when the owner requests the next package. Stage 5 is
+Continue Stage 5 with WP5 when the owner requests the next package. Stage 5 is
 authorized; do not ask for Stage 4 acceptance before continuing CLI work. Retain
 one work package at a time unless the owner changes that preference. Use the
 public Python API; do not introduce new database operations or duplicate SQL

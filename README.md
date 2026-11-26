@@ -16,7 +16,8 @@ acceptance. The [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STA
 records successful coverage of all 677 tests across cumulative execution and a
 targeted rerun, including the transient staging failure. Stage 4 acceptance is
 deferred until the owner can validate through the CLI. Stage 5 WP1–WP3 provide
-all 16 CLI operation mappings, including lifecycle changes and deletion. Database-backed CLI validation remains pending.
+all 16 CLI operation mappings, including lifecycle changes and deletion. WP4
+adds real executable validation in staging; cumulative regression remains WP5.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -34,8 +35,8 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 
 ## CLI Reference
 
-Stage 5 is in progress. All specified commands are implemented; real CLI database
-validation and cumulative regression remain pending.
+Stage 5 is in progress. All specified commands are implemented. WP4 tests real
+CLI workflows in staging; cumulative regression and closeout remain pending.
 
 Install or refresh the executable from the project root in the existing virtual
 environment:
@@ -122,8 +123,9 @@ arkkan type add custom -d 'Custom resources'
 arkkan type update custom --clear-description
 ```
 
-WP1–WP3 have local unit coverage; WP1 also verifies executable installation. Real CLI database
-validation remains pending; see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
+WP1–WP3 have local unit coverage; WP1 also verifies executable installation.
+WP4 exercises real CLI database workflows, permissions and password-file use;
+see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
 
 ## Python API Reference
 

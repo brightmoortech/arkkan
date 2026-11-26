@@ -2,7 +2,7 @@
 
 ## Phase 1, Stage 5: CLI
 
-**Status:** In progress; WP1–WP3 complete, WP4–WP6 pending. This report accumulates
+**Status:** In progress; WP1–WP4 complete; WP5–WP6 pending. This report accumulates
 actual evidence and will be finalized at Stage 5 closeout. Stage 4 acceptance
 is deferred until the owner can test through the CLI. The owner explicitly
 authorized Stage 5; no owner acceptance or manual test results are claimed.
@@ -14,7 +14,7 @@ authorized Stage 5; no owner acceptance or manual test results are claimed.
 | WP1 | Installable executable, help, output/errors and four read commands | Complete; checkpoint `0489e93` |
 | WP2 | Resource/type creation and metadata updates, UTF-8 file/stdin input and clearing | Complete; checkpoint `6b591c7` |
 | WP3 | Lifecycle/deletion commands; all 16 command mappings | Complete; checkpoint `dd0bff2` |
-| WP4 | Real PostgreSQL CLI workflows, role authorization and password-file authentication | Pending |
+| WP4 | Real PostgreSQL CLI workflows, role authorization and password-file authentication | Complete; checkpoint `a226b9e` |
 | WP5 | Cumulative regression, corrections and verification | Pending |
 | WP6 | Final usage documentation, report, audits and handover | Pending |
 
@@ -167,16 +167,88 @@ historical results and the owner's deferred acceptance. Quality checks cover
 readability, examples, local links and consistent progress/pickup guidance.
 Minor wording/wrapping corrections clarify the overview and WP2 push status;
 no material content discrepancy or unresolved quality finding remained.
-Database CLI validation remains unexecuted.
+Database CLI validation was not executed in WP3; WP4 evidence follows.
 
-## 6. Remaining validation and limitations
+## 6. WP4 execution evidence and audits
 
-No PostgreSQL or CLI database tests were run in WP1–WP3. Public API doubles
-establish routing and presentation only; real authentication, role authorization,
-database failures and command workflows remain WP4 requirements. The existing
-Stage 4 integration evidence is not relabeled as CLI evidence.
+- Date: 2026-11-26, development and staging checkouts on the owner's Mac.
+- Python 3.12.10 / pytest 9.1.1; real installed executable and Psycopg/PostgreSQL.
+- Initial test checkpoint: `c1db1fcaaa724e305bea1ed2dc6cc0892bbcc85d`.
+- Final audited checkpoint: `a226b9e715286b0aa19b857c95333e42a92e7347`.
+- No application source, SQL, configuration or dependency changes were required.
 
-All command mappings are implemented. Real CLI database validation remains WP4;
-prior-stage database regression is planned in WP5. Stage 5 is not complete or ready for
-acceptance. Stage 6 is not authorized. Staging and development database contents
-were not changed by WP1–WP3.
+Development regression: `.venv/bin/python -m pytest tests/unit -q --junitxml=/private/tmp/arkkan-stage5-wp4-unit.xml`
+passed **931 cases in 1.72 seconds**. Staging's editable installation was refreshed
+with `.venv/bin/python -m pip install --no-deps --no-build-isolation -e .`.
+
+Initial staging run at `c1db1fc`:
+
+```bash
+.venv/bin/python -m pytest tests/e2e -q --junitxml=/private/tmp/arkkan-stage5-wp4-e2e.xml
+```
+
+**5 passed in 337.77 seconds**, no failures, errors or skips. Tests exercise all
+16 command mappings with actual database calls, both roles and password-file
+credentials. Each executable invocation is preceded by staging verification;
+child processes use explicit target settings, with no API/driver doubles.
+Fixtures reset only known application objects/roles using the existing guarded
+helpers. Temporary credentials are protected, checked for preservation and removed.
+
+Final staging run at `a226b9e`:
+
+```bash
+.venv/bin/python -m pytest tests/unit tests/e2e -q --junitxml=/private/tmp/arkkan-stage5-wp4-final.xml
+```
+
+**936 passed in 345.40 seconds**, comprising 931 unit cases and all five e2e
+cases; zero failures, errors or skips. The post-run command
+`.venv/bin/python scripts/manage_environment.py check` passed, and staging
+remains clean at the tested revision. Earlier-stage integration tests were not
+rerun in WP4; cumulative unit/integration/e2e regression remains WP5.
+
+| IDs | Scope | Final outcome |
+|---|---|---|
+| S5-025 | Literal identifiers, file/stdin/empty content, all reads for both roles, metadata updates | Passed |
+| S5-026 | Lifecycle/deletion, force restrictions, atomic rejections, retained definitions and counts | Passed |
+| S5-027 | Reader denial for all 12 writes, human/JSON errors, missing-password failure/recovery | Passed |
+| S5-028 | Local UTF-8/syntax failure, sanitized errors and data preservation | Passed |
+| S5-029 | Injected database failure, rollback, diagnostic sanitization and recovery | Passed |
+
+Source audit 1 checked command coverage, real persistence, role/password-file
+behavior, binary input/output and staging isolation. It identified insufficient
+proof that metadata clearing changed stored values: `93a5286` sets nonempty
+metadata, verifies stored empty strings and revised version information, then
+verifies cleared nulls.
+Source audit 2 checked helper reuse, cleanup, timeout behavior, credential handling
+and maintainability. `a226b9e` compares password-file hashes so assertion failures
+cannot print credential contents. All five cases passed again after this fixture
+correction, which affects every case. No database policy or safety guard was bypassed.
+
+README, DEVELOPMENT, TEST_SPECIFICATION, ARKKAN_HANDOVER and this report each
+received full-file content/compliance and separate quality review passes.
+Pass 1 compared the CLI requirements, test source, Git checkpoints and execution
+evidence; it clarified historical pending-status wording and corrected the
+metadata-audit description to match the actual assertions. Pass 2 checked
+commands, test names, local link paths, progress/pickup consistency and readability.
+It distinguished Stage 4 regression instructions from Stage 5's added e2e suite
+and made S5-025's version-information coverage precise. Final results and
+post-run status were rechecked against JUnit and command output. Baseline diffs
+preserve historical evidence and owner decisions. No unresolved material finding
+remains; stage acceptance and the validation limits below remain unchanged.
+
+Supplementary JUnit files may be removed by host cleanup. SHA-256:
+
+- Development unit: `6447854216d0be098bb15e584398398b9c94a500f11815baebb8c9c1a113da2b`.
+- Initial e2e: `5705828b8290ed2fc7a9aee9a7abd115760d6cd01df8c7b73fc1d13870e97d70`.
+- Final unit/e2e: `14df1648690436b273a445e4a0c0940aeb252a1b63d2b6e6409e77a687802527`.
+
+## 7. Remaining validation and limitations
+
+WP1–WP3 used local doubles; WP4 adds actual CLI database evidence separately.
+The existing Stage 4 integration evidence is not relabeled as CLI evidence.
+
+All command mappings are implemented. Prior-stage database regression and
+cumulative CLI verification are planned in WP5. Stage 5 is not complete or ready for
+acceptance. Stage 6 is not authorized. WP4 resets staging application fixtures;
+development database contents were not changed. Linux execution and owner manual
+validation are not established by these macOS tests.
