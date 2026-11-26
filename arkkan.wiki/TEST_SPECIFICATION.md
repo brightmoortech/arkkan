@@ -400,3 +400,27 @@ Every completed call checks its response envelope and connection closure.
 Run these cases with all earlier unit and integration tests for the cumulative
 WP5 gate. The Stage 4 execution report records the cumulative results and
 affected-test rerun separately. Owner acceptance is a separate decision.
+
+
+## Phase 1, Stage 5: CLI
+
+### Work Package 1: Foundation and read commands
+
+`tests/unit/test_cli.py` covers local parsing and presentation using public API
+doubles. Database connections are blocked. The installed executable is exercised
+from a temporary directory for help only. These 66 cases bring the unit inventory
+to 658; they do not establish real PostgreSQL CLI behavior. Administration,
+UTF-8 input files/stdin, clearing, lifecycle and authorization coverage will be
+added in subsequent packages. Actual results are in the
+[Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
+
+| ID | Requirement / acceptance criterion | Test and expected outcome |
+|---|---|---|
+| S5-001 | CLI / Argument conventions; Output and errors | `test_s5_001_invalid_arguments`: missing/unknown commands, values, invalid mode/combinations and out-of-scope options exit 2 on stderr before any public API call. |
+| S5-002 | CLI / help at every command level | `test_s5_002_help`: both help flags succeed at root, group and implemented command levels without connecting. |
+| S5-003 | CLI / Command reference; literal tokens and defaults | `test_s5_003_read_mapping`: route four read operations, all content call forms/modes, blank and Unicode/literal arguments unchanged; preserve complete JSON responses. |
+| S5-004 | CLI / Output and errors | `test_s5_004_exact_content`: preserve empty, Unicode, whitespace and newline content exactly in human and JSON modes. |
+| S5-005 | CLI / human-readable metadata | `test_s5_005_metadata_output`: list, default and info show identifiers/metadata, null/empty fields and empty/populated collections without content. |
+| S5-006 | CLI / API errors and exit codes | `test_s5_006_api_error_output`: every read command returns 1 for API errors; human errors use stderr, JSON errors preserve the envelope on stdout. |
+| S5-007 | CLI / Installation and database access | `test_s5_007_missing_configuration`: missing runtime settings return the API configuration error and exit 1 before connecting. |
+| S5-008 | CLI / installable executable | `test_s5_008_installed_entry_point`: installed executable runs help outside the checkout with libpq variables removed; exits 0 without stderr. |

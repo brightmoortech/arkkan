@@ -4,7 +4,8 @@
 
 - Execution date: 2026-11-25; documentation closeout: 2026-11-26.
 - Status: implementation and validation complete; ready for owner acceptance.
-  Owner acceptance has not been supplied. Stage 5 is not authorized.
+  Owner acceptance is deferred until CLI-based manual validation. The owner
+  subsequently authorized Stage 5; that decision adds no Stage 4 test evidence.
 - Final tested checkpoint: `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`.
   Cumulative execution used `b663ad865181c290a480b0212c58633927683461`;
   the final checkpoint changes only rollback-test helper transactions.

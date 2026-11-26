@@ -14,7 +14,10 @@ role permissions and was accepted on November 25, 2026. See the
 evidence. Stage 4 implements all 16 Python API functions and is ready for owner
 acceptance. The [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
 records successful coverage of all 677 tests across cumulative execution and a
-targeted rerun, including the transient staging failure. The CLI is not implemented.
+targeted rerun, including the transient staging failure. Stage 4 acceptance is
+deferred until the owner can validate through the CLI. Stage 5 WP1 provides the
+installed CLI and four read commands; administration commands and database-backed
+CLI validation remain pending.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -31,6 +34,49 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 ## Getting Started
 
 ## CLI Reference
+
+Stage 5 is in progress. The available commands are listed below; resource/type
+writes, lifecycle changes and deletion commands are not yet implemented.
+
+Install or refresh the executable from the project root in the existing virtual
+environment:
+
+```bash
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/arkkan --help
+```
+
+For a new environment, first follow the [development setup](arkkan.wiki/DEVELOPMENT.md#development-setup)
+to install the pinned build and runtime dependencies. Activate `.venv` to use
+`arkkan` from `PATH`, or use its absolute executable path from another directory.
+No system Python changes are needed.
+
+The CLI uses the same process connection settings and protected password file
+as the Python API below; it does not load `.env` automatically. Set `PGDATABASE`
+and `PGUSER`, plus `PGHOST`, `PGPORT` and `PGPASSFILE` as needed. The target must
+already be initialized. PostgreSQL enforces the selected role's permissions.
+There is no password option or setup subcommand.
+
+| Command | Purpose |
+|---|---|
+| `arkkan resource get SLUG` | Print default-version content. |
+| `arkkan resource get SLUG -v VERSION` | Print the specified available version's content. |
+| `arkkan resource get SLUG -v VERSION -m MODE` | Select with `strict`, `version_priority` or `default_priority`. |
+| `arkkan resource list -t TYPE` | List resource metadata for a type. |
+| `arkkan resource default SLUG` | Show the default version identifier. |
+| `arkkan resource info SLUG` | Show metadata and all version states, without content. |
+
+Append `-j` to any available operational command for the complete API response
+JSON. Without it, `resource get` writes only content, preserving empty content
+and existing newlines; other commands print concise metadata. Human-readable
+API errors go to standard error; JSON API errors go to standard output with
+exit code 1. Success exits 0; syntax/local input errors exit 2. `-m` requires
+`-v`; options belong to their own command. `-h` and `--help` work at each
+implemented command level without connecting. `arkkan type -h` currently
+identifies its administration commands as pending.
+
+WP1 has local unit and executable-installation coverage. Real CLI database
+validation remains pending; see the [Stage 5 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md).
 
 ## Python API Reference
 

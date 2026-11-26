@@ -182,8 +182,9 @@ access. Stage 4 WP2 provides Python read wrappers, and WP3 adds resource/type
 administration wrappers. WP4 completes the Python API with lifecycle/deletion
 wrappers. WP5 adds real PostgreSQL integration tests for all 16 Python operations.
 See the [Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md) for results,
-revisions and limitations. Stage 4 is ready for owner acceptance; the CLI is not
-implemented.
+revisions and limitations. Stage 4 acceptance is deferred until owner CLI testing.
+Stage 5 WP1 implements the CLI entry point and four read commands; subsequent
+packages add administration commands and real CLI database validation.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -374,7 +375,7 @@ PostgreSQL validates keys, resource/type rules, permissions and state policies.
 WP4 adds the seven lifecycle/deletion wrappers in the same module, completing
 all 16 public operations. Text arguments remain literal; the single-version
 force option accepts booleans or SQL NULL, with null rejected by SQL. Bulk
-operations have no force option. The CLI remains pending.
+operations have no force option. Stage 5 CLI progress is described below.
 
 The WP1 tests in `tests/unit/test_api.py` use driver doubles. They cover cleanup,
 error translation, response validation and configuration without connecting to
@@ -459,6 +460,28 @@ results and tested revisions. Its cumulative run encountered an unavailable host
 port during container recreation; later guarded setup and the affected tests
 passed. If this recurs, inspect the target and port owner before retrying setup;
 never bypass the staging guard or remove unrelated infrastructure.
+
+## CLI Development and Validation
+
+`src/arkkan/_cli.py` implements the console entry point declared in
+`pyproject.toml`. It uses standard-library argument parsing and calls only the
+public `arkkan` API. WP1 covers read commands, help, output and exit codes.
+See the [CLI reference](../README.md#cli-reference) for installation and usage.
+After changing entry-point metadata, refresh the existing environment:
+
+```bash
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/python -m pytest tests/unit/test_cli.py -q
+```
+
+This installation command reuses the pinned dependencies installed by bootstrap.
+The CLI unit suite blocks database connections, uses public API doubles, checks
+exact content and JSON/error streams, and launches the installed executable's
+help from a temporary working directory. Run the full unit suite for regression.
+It does not establish role authorization or real CLI database behavior. Those
+checks will run in `tests/e2e/` in guarded staging at a committed revision.
+Track package progress and actual results in the
+[Stage 5 execution report](TEST_EXECUTION_PHASE1_STAGE5.md).
 
 ## Project Documentation
 

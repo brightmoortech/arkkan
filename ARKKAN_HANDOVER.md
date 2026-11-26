@@ -2,7 +2,8 @@
 
 **Date:** 2026-11-26
 
-**Resume point:** Stage 4 WP1–WP6 complete; await owner acceptance before Stage 5
+**Resume point:** Stage 5 WP1 complete; continue with WP2 when instructed.
+Stage 4 acceptance is deferred until owner CLI testing.
 
 **Audience:** A new development chat continuing the existing project.
 
@@ -41,7 +42,9 @@ transaction/connection cleanup, decoded response validation and safe error
 translation. WP2 adds four public read wrappers; WP3 adds five resource/type
 administration wrappers; WP4 completes all 16 operations with lifecycle/deletion
 wrappers. WP5 integration/regression and WP6 documentation closeout are complete.
-Stage 4 is ready for owner acceptance; Stage 5 is not authorized. No dependencies have been added.
+Stage 4 is ready for owner acceptance. The owner subsequently deferred that
+acceptance until CLI-based manual testing and explicitly authorized Stage 5.
+No dependencies have been added.
 
 ### Stage 4 work packages and progress
 
@@ -60,8 +63,8 @@ does not constitute Stage 4 acceptance.
 
 **Progress:** 6 of 6 packages complete; owner acceptance pending. This is a package count,
 not an estimate of effort completed. The owner requested a push before WP6;
-all checkpoints through WP5 documentation commit `f3c8cc2` were pushed to
-`origin/main`. WP6 is delivered as a later local documentation commit.
+all checkpoints through WP6 documentation commit `b5257ca` were pushed to
+`origin/main`.
 
 The durable [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
 consolidates execution, findings, traceability and limitations. WP6 changes no
@@ -165,10 +168,35 @@ commit/rollback failure. Quality review clarified test typing and formatting.
 Both passes checked cleanup, parameter binding, safe diagnostics and the absence
 of duplicated lifecycle rules. No unresolved WP1 source finding remains.
 
+### Stage 5 work packages and progress
+
+The owner authorized Stage 5 after explicitly deferring Stage 4 acceptance until
+CLI-based manual testing. Continue one package per turn, test and commit it,
+then stop. This sequencing decision does not imply acceptance of either stage.
+
+| Package | Deliverable | Status |
+|---|---|---|
+| WP1 | Installable executable, parser/help, shared output/error handling, four read commands and local tests | Complete |
+| WP2 | Resource/type creation and metadata updates, UTF-8 files/stdin, metadata clearing and local tests | Pending |
+| WP3 | Lifecycle/deletion commands and local tests; complete all 16 command mappings | Pending |
+| WP4 | Real CLI PostgreSQL tests, role authorization, password-file authentication and representative command workflows | Pending |
+| WP5 | Cumulative prior-stage and CLI regression, corrections and verification | Pending |
+| WP6 | Complete usage guidance, final Stage 5 report, audits and handover | Pending |
+
+WP1 implementation checkpoint is `0489e93` (local, not pushed).
+WP1 adds `src/arkkan/_cli.py` and the console entry point in `pyproject.toml`.
+It uses standard-library argparse and the public Python API; no SQL or dependency
+changes. Installation refresh succeeded. The final local unit run passed
+**658 tests in 1.27 seconds**, including **66 CLI cases**, with no failures,
+errors or skips. No database tests ran for WP1. Both source and documentation
+review passes completed; real CLI database validation remains pending.
+See the [Stage 5 report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE5.md) and
+[CLI usage](README.md#cli-reference). The report is progressive until closeout.
+
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
-- Remote `origin/main` was pushed through WP5 documentation, `f3c8cc2`.
+- Remote `origin/main` was pushed through Stage 4 WP6, `b5257ca`.
 - Pushed WP5 test commits are: `79105de`, `b663ad8`, and
   `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
   integration test's helper transactions. Application source, SQL and configuration
@@ -225,7 +253,8 @@ each received content/compliance and document-quality audits before WP6 was comm
    Final documentation and the Stage 4 execution report are in the repository.
    The transient S2-030 port conflict and successful retest are recorded above;
    its root cause was not established.
-   Stage 4 authorization does not authorize Stage 5.
+   The owner explicitly authorized Stage 5 while deferring Stage 4 acceptance
+   until the CLI supports manual validation.
 3. **No unresolved Stage 3 defect is recorded.** S3-KI-001 through S3-KI-010 are
    retained as resolved findings in the final execution report. Do not delete that
    history or treat resolved findings as unfinished work. Notable corrections were
@@ -333,8 +362,8 @@ the owner to accept it again. Stage 4 is ready for owner acceptance. Review
 transient port conflict and successful rerun; do not describe it as one clean
 full-suite run at the final test revision.
 
-Obtain the owner's Stage 4 decision and explicit authorization before starting
-Stage 5 CLI work. Record the decision when supplied. If authorized, plan Stage 5
-against the existing technical CLI contracts and retain one work package at a
-time unless the owner changes that preference. Use the public Python API; do
-not introduce new database operations or duplicate SQL business rules.
+Continue Stage 5 with WP2 when the owner requests the next package. Stage 5 is
+authorized; do not ask for Stage 4 acceptance before continuing CLI work. Retain
+one work package at a time unless the owner changes that preference. Use the
+public Python API; do not introduce new database operations or duplicate SQL
+business rules. Stage 6 remains unauthorized.
