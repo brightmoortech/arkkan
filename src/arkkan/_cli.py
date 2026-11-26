@@ -83,11 +83,38 @@ def _parser() -> argparse.ArgumentParser:
     _metadata_option(update, "-i", "version_info", "--clear-info")
     update.add_argument("-j", action="store_true", help="Print API response JSON")
 
+    for name, description in (
+        ("delete-version", "Delete one obsolete version, keeping its resource"),
+        ("delete-obsolete", "Delete a resource's obsolete versions"),
+        ("cleanup", "Delete obsolete versions across all resources"),
+        ("delete", "Delete an empty or entirely obsolete resource"),
+        ("state", "Change one version's lifecycle state"),
+        ("state-all", "Change all versions' lifecycle state atomically"),
+        ("state-matching", "Change versions matching a source state atomically"),
+    ):
+        command = commands.add_parser(
+            name, help=description, description=description, allow_abbrev=False,
+        )
+        command.add_argument("-j", action="store_true", help="Print API response JSON")
+        if name != "cleanup":
+            command.add_argument("slug", metavar="SLUG")
+        if name in ("delete-version", "state"):
+            command.add_argument("-v", dest="version", required=True, metavar="VERSION")
+        if name in ("state", "state-all", "state-matching"):
+            command.add_argument("-s", dest="target_state", required=True, metavar="STATE")
+        if name == "state-matching":
+            command.add_argument("-g", dest="source_state", required=True, metavar="STATE")
+        if name == "state":
+            command.add_argument(
+                "-F", dest="force", action="store_true",
+                help="Permit default removal without replacement; other policies still apply",
+            )
+
     resource_type = groups.add_parser(
         "type", help="Manage resource types", allow_abbrev=False,
     )
     type_commands = resource_type.add_subparsers(dest="command", required=True)
-    for name in ("add", "update"):
+    for name in ("add", "update", "delete"):
         command = type_commands.add_parser(
             name, help=f"{name.capitalize()} a resource type", allow_abbrev=False,
         )
@@ -95,7 +122,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("-j", action="store_true", help="Print API response JSON")
         if name == "add":
             command.add_argument("-d", dest="description", metavar="DESCRIPTION")
-        else:
+        elif name == "update":
             _metadata_option(
                 command, "-d", "description", "--clear-description", required=True,
             )
@@ -167,6 +194,30 @@ def _read_response(args: argparse.Namespace) -> dict[str, Any]:
     raise ValueError("Unsupported read command.")
 
 
+def _lifecycle_response(args: argparse.Namespace) -> dict[str, Any]:
+    if args.group == "type" and args.command == "delete":
+        return arkkan.delete_resource_type(args.slug)
+    if args.command == "delete-version":
+        return arkkan.delete_resource_version(args.slug, args.version)
+    if args.command == "delete-obsolete":
+        return arkkan.delete_resource_version_all(args.slug)
+    if args.command == "cleanup":
+        return arkkan.clean_up()
+    if args.command == "delete":
+        return arkkan.delete_resource(args.slug)
+    if args.command == "state":
+        return arkkan.set_resource_state(
+            args.slug, args.version, args.target_state, force=args.force,
+        )
+    if args.command == "state-all":
+        return arkkan.set_resource_state_all(args.slug, args.target_state)
+    if args.command == "state-matching":
+        return arkkan.set_resource_state_all_with_guard(
+            args.slug, args.source_state, args.target_state,
+        )
+    raise ValueError("Unsupported lifecycle command.")
+
+
 def _print_result(response: dict[str, Any], json_output: bool) -> int:
     failed = response["result"] == "error"
     if json_output:
@@ -213,6 +264,20 @@ def _print_result(response: dict[str, Any], json_output: bool) -> int:
             print(f"Created type: {data['slug']}")
         elif operation == "update_resource_type":
             print(f"Updated type description: {data['slug']}")
+        elif operation == "delete_resource_type":
+            print(f"Deleted type: {data['slug']}")
+        elif operation == "delete_resource_version":
+            print(f"Deleted {data['slug']} version {data['version']}")
+        elif operation == "delete_resource_version_all":
+            print(f"Deleted obsolete versions for {data['slug']}: {data['deleted_count']}")
+        elif operation == "clean_up":
+            print(f"Deleted obsolete versions: {data['deleted_count']}")
+        elif operation == "delete_resource":
+            print(f"Deleted resource {data['slug']}; versions: {data['deleted_version_count']}")
+        elif operation == "set_resource_state":
+            print(f"Updated {data['slug']} version {data['version']}: {data['state']}")
+        elif operation in ("set_resource_state_all", "set_resource_state_all_with_guard"):
+            print(f"Updated versions for {data['slug']}: {data['changed_count']}")
         else:
             raise ValueError("Unsupported operation output.")
     return 1 if failed else 0
@@ -225,6 +290,8 @@ def _main(argv: list[str] | None = None) -> int:
         parser.error("-m requires -v")
     if args.command in ("add", "update"):
         response = _write_response(args, parser)
-    else:
+    elif args.command in ("get", "list", "default", "info"):
         response = _read_response(args)
+    else:
+        response = _lifecycle_response(args)
     return _print_result(response, args.j)
