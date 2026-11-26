@@ -17,7 +17,8 @@ records successful coverage of all 677 tests across cumulative execution and a
 targeted rerun, including the transient staging failure. Stage 4 acceptance is
 deferred until the owner can validate through the CLI. Stage 5 WP1–WP3 provide
 all 16 CLI operation mappings, including lifecycle changes and deletion. WP4
-adds real executable validation in staging; cumulative regression remains WP5.
+adds real executable validation in staging. WP5 cumulative regression passed
+all 1,021 tests at `44a10aa`; Stage 5 documentation closeout remains WP6.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -36,7 +37,8 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 ## CLI Reference
 
 Stage 5 is in progress. All specified commands are implemented. WP4 tests real
-CLI workflows in staging; cumulative regression and closeout remain pending.
+CLI workflows in staging, and WP5 cumulative regression passed. Documentation
+closeout remains WP6; owner acceptance is pending.
 
 Install or refresh the executable from the project root in the existing virtual
 environment:

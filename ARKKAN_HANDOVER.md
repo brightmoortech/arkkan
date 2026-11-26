@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-26
 
-**Resume point:** Stage 5 WP1–WP4 complete; continue with WP5 when instructed.
+**Resume point:** Stage 5 WP1–WP5 complete; continue with WP6 when instructed.
 Stage 4 acceptance is deferred until owner CLI testing.
 
 **Audience:** A new development chat continuing the existing project.
@@ -180,7 +180,7 @@ then stop. This sequencing decision does not imply acceptance of either stage.
 | WP2 | Resource/type creation and metadata updates, UTF-8 files/stdin, metadata clearing and local tests | Complete |
 | WP3 | Lifecycle/deletion commands and local tests; complete all 16 command mappings | Complete |
 | WP4 | Real CLI PostgreSQL tests, role authorization, password-file authentication and representative command workflows | Complete |
-| WP5 | Cumulative prior-stage and CLI regression, corrections and verification | Pending |
+| WP5 | Cumulative prior-stage and CLI regression, corrections and verification | Complete |
 | WP6 | Complete usage guidance, final Stage 5 report, audits and handover | Pending |
 
 WP1 implementation checkpoint `0489e93` and documentation `ea94b08` are pushed.
@@ -225,9 +225,22 @@ prevent assertion diagnostics from displaying password-file contents. Final
 unit/e2e verification at `a226b9e` passed **936 tests in 345.40 seconds**, with
 no failures, errors or skips. The post-run staging environment check passed.
 Both source and document audit passes are complete; see the Stage 5 report.
-WP4 commits remain local, not pushed.
-After WP4, continue with WP5 cumulative unit/integration/e2e regression. Stage 5
-acceptance and Stage 4 owner acceptance remain pending.
+WP4 commits remain local, not pushed. Stage 5 acceptance and Stage 4 owner
+acceptance remain pending.
+
+WP5 cumulative regression passed **1,021 tests in 2,288.11 seconds** at
+`44a10aaebe99cf780f01fe3e5f10752e023bfd14` on 2026-11-26: 931 unit,
+85 integration and five e2e cases, with no failures, errors or skips. All 170
+specified identifiers were present. This is one clean cumulative run at that
+revision, including container recreation, all prior-stage tests and CLI workflows.
+The earlier port conflict did not recur; its original cause remains unestablished.
+Both pre-run and post-run staging checks passed; the staging checkout is clean.
+No code, tests, SQL, dependencies or configuration needed correction. Two source
+review passes and two document audit passes completed; see the Stage 5 report
+for scope, command, checksum and limitations. WP5 delivery remains local.
+
+Next is WP6: finalize Stage 5 usage guidance, execution report, audits and
+handover for owner review. Do not start Stage 6 or claim owner acceptance.
 
 ## 2. Repository checkpoints and delivery
 
@@ -237,8 +250,8 @@ acceptance and Stage 4 owner acceptance remain pending.
   `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
   integration test's helper transactions. Application source, SQL and configuration
   are identical across these checkpoints.
-- Staging: `/Users/haitham/development/stage/arkkan`, detached at `a226b9e` for
-  Stage 5 WP4 verification. Earlier Stage 4 runs and their revisions remain
+- Staging: `/Users/haitham/development/stage/arkkan`, detached at `44a10aa` for
+  Stage 5 WP5 cumulative regression. Earlier Stage 4 runs and their revisions remain
   recorded above; they are not evidence of current cumulative regression.
 - Stage 3 historical tested implementation:
   `da6d921758f07356a5fefa340ad63678a09b88d6`; documentation closeout:
@@ -398,8 +411,8 @@ the owner to accept it again. Stage 4 is ready for owner acceptance. Review
 transient port conflict and successful rerun; do not describe it as one clean
 full-suite run at the final test revision.
 
-Continue Stage 5 with WP5 when the owner requests the next package. Stage 5 is
-authorized; do not ask for Stage 4 acceptance before continuing CLI work. Retain
+Continue Stage 5 with WP6 when the owner requests the next package. Stage 5 is
+authorized; do not ask for Stage 4 acceptance before completing CLI closeout. Retain
 one work package at a time unless the owner changes that preference. Use the
 public Python API; do not introduce new database operations or duplicate SQL
 business rules. Stage 6 remains unauthorized.

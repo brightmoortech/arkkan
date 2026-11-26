@@ -2,7 +2,7 @@
 
 ## Phase 1, Stage 5: CLI
 
-**Status:** In progress; WP1–WP4 complete; WP5–WP6 pending. This report accumulates
+**Status:** In progress; WP1–WP5 complete; WP6 pending. This report accumulates
 actual evidence and will be finalized at Stage 5 closeout. Stage 4 acceptance
 is deferred until the owner can test through the CLI. The owner explicitly
 authorized Stage 5; no owner acceptance or manual test results are claimed.
@@ -15,7 +15,7 @@ authorized Stage 5; no owner acceptance or manual test results are claimed.
 | WP2 | Resource/type creation and metadata updates, UTF-8 file/stdin input and clearing | Complete; checkpoint `6b591c7` |
 | WP3 | Lifecycle/deletion commands; all 16 command mappings | Complete; checkpoint `dd0bff2` |
 | WP4 | Real PostgreSQL CLI workflows, role authorization and password-file authentication | Complete; checkpoint `a226b9e` |
-| WP5 | Cumulative regression, corrections and verification | Pending |
+| WP5 | Cumulative regression, corrections and verification | Complete; tested checkpoint `44a10aa` |
 | WP6 | Final usage documentation, report, audits and handover | Pending |
 
 ## 2. WP1 execution evidence
@@ -242,13 +242,61 @@ Supplementary JUnit files may be removed by host cleanup. SHA-256:
 - Initial e2e: `5705828b8290ed2fc7a9aee9a7abd115760d6cd01df8c7b73fc1d13870e97d70`.
 - Final unit/e2e: `14df1648690436b273a445e4a0c0940aeb252a1b63d2b6e6409e77a687802527`.
 
-## 7. Remaining validation and limitations
+## 7. WP5 cumulative regression
+
+- Date: 2026-11-26; owner's Mac, staging checkout.
+- Tested checkpoint: `44a10aaebe99cf780f01fe3e5f10752e023bfd14`.
+- The checkout was clean and `scripts/manage_environment.py check` passed before execution.
+- No source, test, SQL, dependency or configuration changes were required.
+
+```bash
+.venv/bin/python -m pytest tests/unit tests/integration tests/e2e -q --junitxml=/private/tmp/arkkan-stage5-wp5-44a10aa.xml
+```
+
+**1,021 passed in 2,288.11 seconds (38 minutes 8 seconds)**; zero failures,
+errors or skips. JUnit confirms 931 unit, 85 integration and five e2e cases,
+covering all 170 specified identifiers. This is one complete successful run
+at the stated revision, including container persistence, initialization,
+SQL policy/concurrency, Python API and real CLI workflows.
+
+S2-030 container recreation passed; the earlier Stage 4 port conflict did not
+recur in this run. This observation does not establish its original cause.
+Post-run `.venv/bin/python scripts/manage_environment.py check` passed, staging
+remains clean at `44a10aa`, and development source/tests/SQL/dependencies still
+match the tested revision. Application fixtures were reset by the tests;
+development database contents were not changed.
+
+JUnit: `/private/tmp/arkkan-stage5-wp5-44a10aa.xml` (subject to host cleanup).
+SHA-256: `0f506e81a487a85af7a00ab531ef3ce6ebac351b3e9c3546361c34a5a6915436`.
+
+Requirements/correctness review checked all CLI command mappings, argument
+validation, content preservation, metadata clearing, output/error contracts,
+permissions and transaction boundaries against the CLI requirements and tests.
+A source/specification check matched all 170 unique identifiers, S1-001–006,
+S2-001–068, S3-001–032, S4-001–035 and S5-001–029, to executable test functions.
+The separate maintainability review checked public API dispatch, helper reuse,
+fixture isolation/cleanup, subprocess limits and dependency/entry-point metadata.
+No new material source finding or code correction was identified.
+
+README, ARKKAN_HANDOVER and this report received full-file content/compliance
+and separate quality audits. Content checks compared the CLI requirements,
+source/specification inventory, Git revision, JUnit counts and actual commands;
+progress and pickup instructions now identify WP6 while preserving earlier
+results and deferred acceptance. Quality checks verified local links, commands,
+terminology, readability and cross-document status. Minor pickup wording was
+clarified; no unresolved material finding remains. Final outcome and environment
+status were rechecked after execution, and baseline diffs preserve unrelated
+content. Test definitions and development commands remain unchanged, so their
+documents need no WP5 edit.
+
+## 8. Remaining validation and limitations
 
 WP1–WP3 used local doubles; WP4 adds actual CLI database evidence separately.
 The existing Stage 4 integration evidence is not relabeled as CLI evidence.
 
-All command mappings are implemented. Prior-stage database regression and
-cumulative CLI verification are planned in WP5. Stage 5 is not complete or ready for
-acceptance. Stage 6 is not authorized. WP4 resets staging application fixtures;
+All command mappings and WP5 cumulative regression are complete. WP6 must
+finalize usage guidance, this report and the handover before Stage 5 closeout.
+Stage 5 is not yet presented for acceptance. Stage 6 is not authorized.
+WP4/WP5 reset staging application fixtures;
 development database contents were not changed. Linux execution and owner manual
 validation are not established by these macOS tests.
