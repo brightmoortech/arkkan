@@ -11,10 +11,10 @@ assemble prompts.
 November 24, 2026. Stage 3 implements all 16 PostgreSQL API operations and their
 role permissions and was accepted on November 25, 2026. See the
 [Stage 3 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) for validation
-evidence. Stage 4 is in progress: all 16 Python API functions are implemented
-and unit-tested; focused PostgreSQL integration tests also pass. Stage 4
-validation evidence is recorded in [the handover](ARKKAN_HANDOVER.md). Final stage
-documentation and acceptance remain pending; the CLI is not yet implemented.
+evidence. Stage 4 implements all 16 Python API functions and is ready for owner
+acceptance. The [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
+records successful coverage of all 677 tests across cumulative execution and a
+targeted rerun, including the transient staging failure. The CLI is not implemented.
 
 For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DEVELOPMENT.md).
 
@@ -34,7 +34,12 @@ For development setup and automated testing, see [DEVELOPMENT.md](arkkan.wiki/DE
 
 ## Python API Reference
 
-The available read functions are exported from `arkkan`:
+Install the package in the project virtual environment using the
+[development setup](arkkan.wiki/DEVELOPMENT.md#development-setup). Run consuming
+Python programs with that environment's interpreter. All 16 public operations
+are exported from `arkkan`; underscore-prefixed modules are internal.
+
+The read functions are:
 
 ```python
 from arkkan import (
@@ -63,13 +68,25 @@ Omitting `version` selects the default; explicitly passing `None` is invalid.
 Supplying `mode` requires `version`. Slugs and versions are passed unchanged.
 Unsupported Python argument types return an error response; malformed Python
 call signatures (missing, extra, duplicate or unknown arguments) raise `TypeError`.
+Each call owns its connection and transaction; calls cannot be grouped into a
+caller-managed transaction. A successful mutation commits before returning;
+rejected operations roll back. A commit failure can leave the outcome uncertain:
+verify the database state before retrying. There is no automatic retry.
+
+```python
+response = get_resource_info("example")
+if response["result"] == "success":
+    metadata = response["data"]
+else:
+    reason = response["reason"]  # Safe diagnostic; decide how the caller handles it.
+```
 
 `get_resource_info(slug)` returns metadata and all version states without content;
 `get_resource_version_default(slug)` identifies the default version;
 `list_resources_matching_type(type_slug)` returns resource metadata for a type,
 including resources with no versions. See the technical requirements for full
 response payloads and PostgreSQL selection policies. See
-[the handover](ARKKAN_HANDOVER.md) for database validation results and revisions.
+[the Stage 4 report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md) for validation results and revisions.
 
 Resource and resource-type administration functions are also exported from
 `arkkan` and require `arkkan_admin` permissions, enforced by PostgreSQL:
@@ -94,6 +111,13 @@ keys, empty changes and invalid version combinations. The caller's dictionary is
 not modified. `add_resource_type(slug, description=None)` creates a custom type;
 `update_resource_type(slug, description)` sets or clears its description;
 `delete_resource_type(slug)` requests deletion of an unused custom type.
+
+The complete resource creation signature is
+`add_resource(slug, version, type_slug=None, name=None, description=None, content="", version_info=None, state="disabled")`.
+The metadata update signature is `update_resource(slug, changes, version=None)`.
+Content is immutable; create a new version to change it. New disabled versions
+must be enabled before content retrieval; default-only retrieval requires an
+`enabled_default` version. Changing metadata does not change availability.
 
 These functions use the same configuration and response/error conventions as
 reads. They call the existing SQL API; protected-type, immutability and lifecycle

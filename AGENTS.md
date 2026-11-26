@@ -16,10 +16,11 @@ Paths are relative to the repository root. The registry identifies each document
 | [TEST_EXECUTION_PHASE1_STAGE1.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE1.md) | Recorded test execution evidence for Phase 1, Stage 1; not a requirements source. |
 | [TEST_EXECUTION_PHASE1_STAGE2.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE2.md) | Recorded test execution evidence and closeout status for Phase 1, Stage 2; not a requirements source. |
 | [TEST_EXECUTION_PHASE1_STAGE3.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE3.md) | Recorded test execution evidence, review findings and closeout status for Phase 1, Stage 3; not a requirements source. |
+| [TEST_EXECUTION_PHASE1_STAGE4.md](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md) | Recorded test execution evidence, review findings, limitations and acceptance checkpoint for Phase 1, Stage 4; not a requirements source. |
 | [DOCUMENT_GOVERNANCE.md](arkkan.wiki/DOCUMENT_GOVERNANCE.md) | Governs authorized document creation, modification, review, auditing, and delivery. |
 | [BACKLOG.md](arkkan.wiki/BACKLOG.md) | Deferred improvements and proposed outcomes; update when items are identified, approved, deferred, or validated. Not a source of implementation authorization. |
 | [AGENTS.md](AGENTS.md) | Repository documentation registry, reading guidance, and maintenance triggers. |
-| [ARKKAN_HANDOVER.md](ARKKAN_HANDOVER.md) | Continuation snapshot after Stage 3 closeout: completed work, validation evidence, acceptance decision and resume guidance; not a requirements source or authorization. |
+| [ARKKAN_HANDOVER.md](ARKKAN_HANDOVER.md) | Continuation snapshot through Stage 4 closeout: completed work, validation evidence, acceptance decision and resume guidance; not a requirements source or authorization. |
 
 ## 2. Document Reading Guidance
 

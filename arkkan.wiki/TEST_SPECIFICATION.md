@@ -302,6 +302,12 @@ both private state helpers.
 
 ## Phase 1, Stage 4: Python API
 
+The 35 identifiers below cover 320 Stage 4 unit cases and six integration cases.
+Together with earlier stages, the cumulative inventory is 592 unit and 85
+integration cases. Actual results, tested revisions and limitations are in the
+[Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md); definitions here do
+not themselves establish a pass.
+
 ### Work Package 1: Execution foundation
 
 These cases are in `tests/unit/test_api.py`. Driver doubles isolate the Python
@@ -326,7 +332,7 @@ requires all operation/error integration cases and prior-stage regression tests.
 Cases in `tests/unit/test_read.py` exercise the four exported functions with a
 double for the shared execution boundary. They verify Python routing and local
 validation, not PostgreSQL selection, permissions or transaction behavior.
-WP5 covers those database checks; see the handover for actual execution evidence.
+WP5 covers those database checks; see the Stage 4 execution report for evidence.
 
 | ID | Requirement / acceptance criterion | Test and expected outcome |
 |---|---|---|
@@ -392,5 +398,5 @@ Every completed call checks its response envelope and connection closure.
 | S4-035 | Connection failures; runtime configuration | `test_s4_035_connection_failure`: deny login to the temporary reader role, verify a safe connection error, restore login and confirm a subsequent database response. |
 
 Run these cases with all earlier unit and integration tests for the cumulative
-WP5 gate. The Stage 4 handover records interim execution evidence; the final
-stage report and acceptance checkpoint remain WP6 deliverables.
+WP5 gate. The Stage 4 execution report records the cumulative results and
+affected-test rerun separately. Owner acceptance is a separate decision.

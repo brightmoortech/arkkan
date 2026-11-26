@@ -181,8 +181,9 @@ grants schema usage and appropriate function execution to `arkkan_admin` and
 access. Stage 4 WP2 provides Python read wrappers, and WP3 adds resource/type
 administration wrappers. WP4 completes the Python API with lifecycle/deletion
 wrappers. WP5 adds real PostgreSQL integration tests for all 16 Python operations.
-See [the handover](../ARKKAN_HANDOVER.md) for actual results and revisions. Final
-Stage 4 documentation and acceptance remain pending; the CLI is not implemented.
+See the [Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md) for results,
+revisions and limitations. Stage 4 is ready for owner acceptance; the CLI is not
+implemented.
 
 The cumulative inventory is 37 migrations. See the
 [Stage 3 execution report](TEST_EXECUTION_PHASE1_STAGE3.md) for the tested
@@ -443,7 +444,21 @@ Run the focused suite from a clean staging checkout of the committed revision:
 The full regression still requires `tests/unit` and all `tests/integration`.
 Do not run concurrent database suites or retain valuable application data in
 staging: the fixtures reset application objects and roles before and after tests.
-Consult [the handover](../ARKKAN_HANDOVER.md) for results and tested revisions.
+The Stage 4 inventory is 592 unit and 85 integration cases. For reproducible
+validation, record the selected commit and save JUnit evidence:
+
+```bash
+.venv/bin/python scripts/manage_environment.py check
+.venv/bin/python -m pytest tests/unit tests/integration -q --junitxml=/private/tmp/arkkan-validation.xml
+.venv/bin/python scripts/manage_environment.py check
+```
+
+These commands are a validation recipe, not evidence of a new run. Consult the
+[Stage 4 execution report](TEST_EXECUTION_PHASE1_STAGE4.md) for actual commands,
+results and tested revisions. Its cumulative run encountered an unavailable host
+port during container recreation; later guarded setup and the affected tests
+passed. If this recurs, inspect the target and port owner before retrying setup;
+never bypass the staging guard or remove unrelated infrastructure.
 
 ## Project Documentation
 

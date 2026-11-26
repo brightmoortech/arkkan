@@ -1,8 +1,8 @@
 # Arkkan development handover
 
-**Date:** 2026-11-25
+**Date:** 2026-11-26
 
-**Resume point:** Stage 4 WP5 complete; stop before WP6
+**Resume point:** Stage 4 WP1–WP6 complete; await owner acceptance before Stage 5
 
 **Audience:** A new development chat continuing the existing project.
 
@@ -40,8 +40,8 @@ to manage credits**. WP1 implements the private Python execution boundary in
 transaction/connection cleanup, decoded response validation and safe error
 translation. WP2 adds four public read wrappers; WP3 adds five resource/type
 administration wrappers; WP4 completes all 16 operations with lifecycle/deletion
-wrappers. WP5 integration/regression is complete; WP6 requires the owner's
-next instruction; Stage 5 is not authorized. No dependencies have been added.
+wrappers. WP5 integration/regression and WP6 documentation closeout are complete.
+Stage 4 is ready for owner acceptance; Stage 5 is not authorized. No dependencies have been added.
 
 ### Stage 4 work packages and progress
 
@@ -56,12 +56,17 @@ does not constitute Stage 4 acceptance.
 | WP3 — Resource administration | Resource-type creation/update/deletion and resource creation/update; preserve omitted versus null values; focused tests | Complete for WP3 scope | 471 unit tests passed, including 80 new WP3 cases; two source audits completed. Commit `7319986`. Database validation is recorded under WP5 below. |
 | WP4 — Lifecycle operations | Single/bulk/guarded state changes, version/resource deletion and cleanup; complete all 16 public operations with focused tests | Complete for WP4 scope | 592 unit tests passed, including 121 new WP4 cases; two source audits completed. Commit `d9c48dd`. Database validation is recorded under WP5 below. |
 | WP5 — Integration and regression | PostgreSQL tests for every Python operation using reader/admin roles; permissions, response contracts, rollback and connection failures; cumulative prior-stage regression | Complete for WP5 scope | All 677 distinct cases passed across cumulative execution and targeted retest; see results and revision limits below. Test checkpoint `7e7d5be`. |
-| WP6 — Documentation and handover | Final usage/development guidance, test traceability, Stage 4 execution report, registry and handover; final audits and acceptance checkpoint | Not started | Package-level documentation is maintained incrementally. `TEST_EXECUTION_PHASE1_STAGE4.md` has not yet been created; Stage 4 acceptance remains pending. |
+| WP6 — Documentation and handover | Final usage/development guidance, test traceability, Stage 4 execution report, registry and handover; final audits and acceptance checkpoint | Complete for WP6 scope | Final report created and registered; usage, development guidance, traceability and handover audited. Owner acceptance remains pending. |
 
-**Progress:** 5 of 6 packages complete; WP6 not started. This is a package count,
-not an estimate of effort completed. The owner requested a push before WP5;
-all checkpoints through `d9c48dd` were pushed successfully to `origin/main`.
-WP5 checkpoints are local commits and have not been pushed.
+**Progress:** 6 of 6 packages complete; owner acceptance pending. This is a package count,
+not an estimate of effort completed. The owner requested a push before WP6;
+all checkpoints through WP5 documentation commit `f3c8cc2` were pushed to
+`origin/main`. WP6 is delivered as a later local documentation commit.
+
+The durable [Stage 4 execution report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md)
+consolidates execution, findings, traceability and limitations. WP6 changes no
+application code, tests, SQL, dependencies or configuration. It adds no database
+test run and makes no claim of owner acceptance.
 
 WP5 validation evidence on 2026-11-25:
 
@@ -109,7 +114,7 @@ reuse of existing guarded helpers. Corrections addressed protected password-file
 creation, exception isolation and atomic helper setup/cleanup. All affected cases
 passed afterward; no unresolved application defect was found. README, DEVELOPMENT,
 TEST_SPECIFICATION and this handover completed content/compliance and quality
-audits before the documentation checkpoint. The final Stage 4 report remains WP6 work.
+audits before the documentation checkpoint. The final Stage 4 report now consolidates this evidence.
 
 WP4 verification on 2026-11-25: `.venv/bin/python -m pytest tests/unit -q`
 passed **592 tests**, including 121 new cases covering S4-024–029. All 16 public
@@ -163,8 +168,8 @@ of duplicated lifecycle rules. No unresolved WP1 source finding remains.
 ## 2. Repository checkpoints and delivery
 
 - Development: `/Users/haitham/development/develop/arkkan`, branch `main`.
-- Remote `origin/main` was pushed through Stage 4 WP4, `d9c48dd`.
-- WP5 test commits are local: `79105de`, `b663ad8`, and
+- Remote `origin/main` was pushed through WP5 documentation, `f3c8cc2`.
+- Pushed WP5 test commits are: `79105de`, `b663ad8`, and
   `7e7d5befb5abcdb7f5175acb93ca5c820f457f1e`. The last changes only the rollback
   integration test's helper transactions. Application source, SQL and configuration
   are identical across these checkpoints.
@@ -176,7 +181,7 @@ of duplicated lifecycle rules. No unresolved WP1 source finding remains.
   `f092375f095c59d1b7ad942c323b98e401221ad3`. Both were pushed. Later commits
   recorded owner acceptance and the Stage 4 packages above.
 - An unrelated local table-formatting edit in `arkkan.wiki/TECHNICAL_REQ.md`
-  remains excluded from WP5. Preserve it on resumption.
+  remains excluded from WP5 and WP6. Preserve it on resumption.
 
 The owner prefers repository commits as delivery. Do not produce replacement
 ZIPs unless requested. The earlier ZIP-based handover workflow is obsolete.
@@ -216,8 +221,8 @@ each received content/compliance and document-quality audits before WP6 was comm
 
 1. **Stage 3 is accepted.** The owner will wait for the CLI before further manual
    testing. No additional owner validation is a pending Stage 3 acceptance gate.
-2. **Stage 4 WP1–WP5 are complete; WP6 is next.**
-   Final documentation, the Stage 4 execution report and acceptance remain pending.
+2. **Stage 4 WP1–WP6 are complete; owner acceptance is pending.**
+   Final documentation and the Stage 4 execution report are in the repository.
    The transient S2-030 port conflict and successful retest are recorded above;
    its root cause was not established.
    Stage 4 authorization does not authorize Stage 5.
@@ -323,15 +328,13 @@ Read this handover and governing sources; inspect Git status, recent commits and
 the staging checkout without disturbing an active validation run. Preserve newer
 owner changes. Review any supplied validation results and resolve confirmed issues
 within the authorized scope. Stage 3 acceptance is already recorded; do not ask
-the owner to accept it again. WP5 is complete; stop before WP6 until instructed.
+the owner to accept it again. Stage 4 is ready for owner acceptance. Review
+[its final report](arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md), including the
+transient port conflict and successful rerun; do not describe it as one clean
+full-suite run at the final test revision.
 
-On the next instruction, complete WP6: consolidate final API usage/development
-and test traceability, create `arkkan.wiki/TEST_EXECUTION_PHASE1_STAGE4.md` with
-actual WP5 results and tested revisions, register it in AGENTS, and update this
-handover. Complete both document audits and any affected verification, commit,
-and present the Stage 4 acceptance checkpoint. Preserve the distinction between
-the failed cumulative run and successful targeted retest; do not invent a clean
-full run. Continue one package at a time, stopping for the owner's next instruction.
-Use the existing SQL API and configuration infrastructure; do not invent extra public
-operations or begin CLI work. Stage 4 must pass unit and staging integration tests
-for all specified operations and errors before its own acceptance checkpoint.
+Obtain the owner's Stage 4 decision and explicit authorization before starting
+Stage 5 CLI work. Record the decision when supplied. If authorized, plan Stage 5
+against the existing technical CLI contracts and retain one work package at a
+time unless the owner changes that preference. Use the public Python API; do
+not introduce new database operations or duplicate SQL business rules.
