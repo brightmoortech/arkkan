@@ -1,6 +1,7 @@
 """Real installed CLI workflows, restricted to the verified staging target."""
 
 from collections.abc import Callable, Iterator
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -38,7 +39,8 @@ def cli(tmp_path: Path) -> Iterator[Callable[..., subprocess.CompletedProcess[by
                                         for value in fields))
         with open(password_file, "x", opener=lambda path, flags: os.open(path, flags, 0o600)) as stream:
             stream.write("\n".join(entries) + "\n")
-        original = password_file.read_bytes()
+        # Compare digests so assertion diagnostics cannot print credentials.
+        original_digest = hashlib.sha256(password_file.read_bytes()).digest()
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith("PG")}
         environment.update({key: settings[key] for key in ("PGHOST", "PGPORT", "PGDATABASE")})
@@ -58,7 +60,7 @@ def cli(tmp_path: Path) -> Iterator[Callable[..., subprocess.CompletedProcess[by
                     cwd=tmp_path, env=child_environment, input=content,
                     capture_output=True, check=False, timeout=30,
                 )
-            assert password_file.read_bytes() == original
+            assert hashlib.sha256(password_file.read_bytes()).digest() == original_digest
             assert password_file.stat().st_mode & 0o777 == 0o600
             assert b"Traceback" not in result.stderr
             return result
